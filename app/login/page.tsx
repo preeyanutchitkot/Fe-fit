@@ -1,17 +1,50 @@
 "use client";
 import React, { useState } from "react";
+import GoogleAuthButton from '@/Auth/GoogleAuthButton';
+import { loginWithGoogle } from "@/api/login";
 
 export default function LoginPage() {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  // Dummy Google login handler for demo
-  const handleGoogleLogin = () => {
+  // Google login handler เชื่อมหลังบ้าน
+  // Google OAuth handler
+  const handleGoogleSuccess = async (credentialResponse: any) => {
     setIsLoading(true);
-    setTimeout(() => {
+    setError("");
+    try {
+      const token = credentialResponse.credential;
+      const { response, data } = await loginWithGoogle(token);
+
+      if (!response.ok) {
+        setError(data.detail || "เข้าสู่ระบบด้วย Google ไม่สำเร็จ");
+        setIsLoading(false);
+        return;
+      }
+
+      localStorage.setItem("token", data.token);
+      localStorage.setItem("user", JSON.stringify(data.user));
+
+      // Redirect based on role
+      const role = data.user.role;
+      if (role === "admin") {
+        window.location.href = "/admin";
+      } else if (role === "trainer") {
+        window.location.href = "/trainer";
+      } else if (role === "trainee") {
+        window.location.href = "/trainee";
+      } else {
+        window.location.href = "/"; // Fallback
+      }
+    } catch (err: any) {
+      setError(err.message || "เกิดข้อผิดพลาด");
+    } finally {
       setIsLoading(false);
-      // Success: redirect or show message
-    }, 1200);
+    }
+  };
+
+  const handleGoogleError = () => {
+    setError("Google login error");
   };
 
   return (
@@ -26,14 +59,14 @@ export default function LoginPage() {
         <p className="text-sm text-gray-500 text-center mb-6 max-w-xs">
           Sign in with your Google account to access FitAddict’s powerful features
         </p>
-        <button
-          onClick={handleGoogleLogin}
-          disabled={isLoading}
-          className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-full border border-gray-200 bg-white hover:bg-gray-50 text-indigo-600 font-semibold text-base shadow-sm transition disabled:opacity-60 mb-4"
-        >
-          <img src="/googlelogo.png" alt="Google" className="w-5 h-5" />
-          {isLoading ? "Signing in..." : "Sign in with Google"}
-        </button>
+        {/* ...existing code... */}
+        <div className="w-full mb-4">
+          <GoogleAuthButton
+            onSuccess={handleGoogleSuccess}
+            onError={handleGoogleError}
+          />
+        </div>
+        {/* ...existing code... */}
         <div className="flex items-center w-full my-4">
           <span className="flex-1 h-px bg-gray-200" />
           <span className="mx-3 text-xs text-gray-400">Secure & Fast</span>

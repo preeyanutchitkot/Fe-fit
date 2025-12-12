@@ -3,6 +3,7 @@ import React, { useRef, useState } from "react";
 import DashboardHeader from "../components/DashboardHeader";
 import { useRouter } from "next/navigation";
 import Head from "next/head";
+import { uploadVideo } from "@/api/trainer";
 
 export default function UploadVideoPage() {
   const [submittingDraft, setSubmittingDraft] = useState(false);
@@ -43,14 +44,35 @@ export default function UploadVideoPage() {
       alert("กรุณาเลือกไฟล์และกรอกชื่อวิดีโอ");
       return;
     }
+    const token = localStorage.getItem("token");
+    if (!token) {
+      alert("No authentication token found");
+      return;
+    }
+
     setSubmittingDraft(true);
     setIsLoading(true);
-    setTimeout(() => {
+
+    try {
+      const formData = new FormData();
+      formData.append("title", name);
+      formData.append("difficulty", level);
+      formData.append("description", `kcal:${kcal || 0} draft:true`);
+      formData.append("approved", "false");
+      formData.append("segments", "[]");
+      formData.append("file", file);
+
+      await uploadVideo(token, formData);
+
+      alert("บันทึก draft สำเร็จ!");
+      router.push("/trainer");
+    } catch (e: any) {
+      console.error("Upload error:", e);
+      alert("Upload failed: " + (e.message || "Unknown error"));
+    } finally {
       setSubmittingDraft(false);
       setIsLoading(false);
-      alert("บันทึก draft สำเร็จ! ");
-      router.push("/dashboard");
-    }, 1500);
+    }
   };
 
   const handleCreate = async () => {
@@ -58,16 +80,39 @@ export default function UploadVideoPage() {
       alert("กรุณาเลือกไฟล์และกรอกชื่อวิดีโอ");
       return;
     }
+    const token = localStorage.getItem("token");
+    if (!token) {
+      alert("No authentication token found");
+      return;
+    }
+
     setSubmitting(true);
-    setTimeout(() => {
+    setIsLoading(true);
+
+    try {
+      const formData = new FormData();
+      formData.append("title", name);
+      formData.append("difficulty", level);
+      formData.append("description", `kcal:${kcal || 0}`);
+      formData.append("approved", "false");
+      formData.append("segments", "[]");
+      formData.append("file", file);
+
+      await uploadVideo(token, formData);
+
+      alert("Upload successful! Video is confirming.");
+      router.push("/trainer");
+    } catch (e: any) {
+      console.error("Upload error:", e);
+      alert("Upload failed: " + (e.message || "Unknown error"));
+    } finally {
       setSubmitting(false);
-      alert("กำลังตรวจสอบ (verifying)... คลิปจะเข้าสู่สถานะ Pending");
-      router.push("/dashboard");
-    }, 1500);
+      setIsLoading(false);
+    }
   };
 
   const handleDiscard = () => {
-    if (window.confirm('Discard changes and go back to Trainer page?')) router.push('/dashboard');
+    if (window.confirm('Discard changes and go back to Trainer page?')) router.push('/trainer');
   };
 
   const levelOptions = [
@@ -220,9 +265,8 @@ export default function UploadVideoPage() {
                         <button
                           key={opt.value}
                           type="button"
-                          className={`w-full text-left px-4 py-2 rounded-xl hover:bg-gray-100 ${
-                            level === opt.value ? "bg-gray-100 font-semibold" : ""
-                          }`}
+                          className={`w-full text-left px-4 py-2 rounded-xl hover:bg-gray-100 ${level === opt.value ? "bg-gray-100 font-semibold" : ""
+                            }`}
                           onClick={() => {
                             setLevel(opt.value);
                             setLevelOpen(false);
@@ -231,7 +275,7 @@ export default function UploadVideoPage() {
                           {opt.label}
                           {level === opt.value && (
                             <svg className="inline-block float-right mt-1 text-purple-500" width="18" height="18" viewBox="0 0 20 20" fill="none">
-                              <path d="M5 10l4 4 6-8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                              <path d="M5 10l4 4 6-8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                             </svg>
                           )}
                         </button>

@@ -1,99 +1,236 @@
 "use client";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Card } from "./ui/card";
-import { Input } from "./ui/input";
 import { Button } from "./ui/button";
-
-
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { Badge } from "./ui/badge";
 import DashboardHeader from "@/app/components/DashboardHeader";
 import Link from "next/link";
-import { Users, Video, Calendar, Plus, Upload, Clock, Flame, TrendingUp } from "lucide-react";
+import {
+  Users,
+  Video,
+  Calendar,
+  Upload,
+  Clock,
+  Flame,
+  TrendingUp,
+  Trash2,
+} from "lucide-react";
+import { useRouter } from "next/navigation";
+import { getVideos, getTrainees, getTrainers, getTrainerDetail, deleteVideo, deleteTrainee, PROFILE_IMAGE_URL, pingUser } from "@/api/trainer";
+import InviteTrainee from "@/app/components/InviteTrainee";
 
-const mockTrainees = [
-  { 
-    id: "1",
-    name: "John Doe",
-    profileImage: "https://randomuser.me/api/portraits/men/32.jpg",
-    isOnline: true,
-    stats: { currentStreak: 5, averageScore: 92 }
-  },
-  {
-    id: "3",
-    name: "P FitAddict",
-    profileImage: "https://randomuser.me/api/portraits/men/43.jpg",
-    isOnline: true,
-    stats: { currentStreak: 12, averageScore: 92 }
-  },
-  {
-    id: "2",
-    name: "Few FitAddict",
-    profileImage: "https://randomuser.me/api/portraits/women/65.jpg",
-    isOnline: false,
-    stats: { currentStreak: 5, averageScore: 75 }
-  }
-];
+interface Trainee {
+  id: string;
+  name: string;
+  email: string;
+  profile_image?: string;
+  is_online?: boolean | string | number;
+  stats?: { currentStreak: number; averageScore: number };
+}
 
-const mockVideos = [
-  {
-    id: "v1",
-    name: "HIIT Cardio",
-    thumbnail: "https://images.unsplash.com/photo-1518611012118-696072aa579a?w=400",
-    status: "Active",
-    duration: "30:00",
-    calories: 350,
-    level: 2,
-    averageScore: 88
-  },
-  { 
-    id: "v2",
-    name: "Yoga Flow",
-    thumbnail: "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=400",
-    status: "Draft",
-    duration: "45:00",
-    calories: 200,
-    level: 1,
-    averageScore: null
-  }
-];
+interface VideoData {
+  id: string;
+  name: string;
+  s3_url: string;
+  thumbnail?: string;
+  status: string;
+  description?: string;
+  duration?: string;
+  calories?: number;
+  level?: number;
+  averageScore?: number;
+  rejected?: boolean;
+  approved?: boolean;
+}
 
 export default function TrainerPage() {
-  const [role, setRole] = useState<"trainer" | "admin" | "trainee">("trainer");
+  const router = useRouter();
+  const [profile, setProfile] = useState<any>({ name: "", email: "", picture: "", is_online: false });
+  const [videos, setVideos] = useState<VideoData[]>([]);
+  const [trainees, setTrainees] = useState<Trainee[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchVideosData = async () => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    try {
+      let vids = await getVideos(token);
+      vids = Array.isArray(vids)
+        ? vids.map((v: any) => {
+          // Logic to fix s3_url if needed, similar to previous implementation
+          let url = v.s3_url || "";
+          const API_BASE = process.env.NEXT_PUBLIC_API_BASE || process.env.NEXT_PUBLIC_BACKEND_URL || "/api/backend";
+          if (url && url.startsWith("/static/")) {
+            url = `${API_BASE}${url}`;
+          } else if (url && !/^https?:\/+/.test(url)) {
+            url = `${API_BASE}/static/${url.replace(/^.*[\\\/]/, "")}`;
+          }
+
+          let status = "";
+          if (v.description?.includes("draft:true")) status = "draft";
+          else if (v.rejected) status = "Rejected";
+          else if (v.approved) status = "Active";
+          else status = "Verifying";
+
+          let kcal = undefined;
+          const match = v.description?.match(/kcal:(\d+)/);
+          if (match) kcal = Number(match[1]);
+
+
+          let durationStr = "00:00";
+          if (typeof v.duration === 'number') {
+            const m = Math.floor(v.duration / 60);
+            const s = v.duration % 60;
+            durationStr = `${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
+          } else if (v.duration) {
+            durationStr = v.duration;
+          }
+
+          return { ...v, s3_url: url, thumbnail: url, status, calories: kcal, duration: durationStr, level: v.level || 1 };
+        })
+        : [];
+      setVideos(vids);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const fetchTraineesData = async () => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    try {
+      const data = await getTrainees(token);
+      const mappedData = Array.isArray(data)
+        ? data.map((t: any) => ({ ...t, id: t.id || t._id }))
+        : [];
+      setTrainees(mappedData);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const fetchProfileData = async () => {
+    const token = localStorage.getItem("token");
+    const userData = localStorage.getItem("user");
+    if (!token) return;
+
+    try {
+      const trainers = await getTrainers(token);
+      let myProfile = null;
+      if (Array.isArray(trainers)) {
+        if (userData) {
+          const userObj = JSON.parse(userData);
+          myProfile = trainers.find((t: any) => t.email === userObj.email);
+        }
+        if (!myProfile) myProfile = trainers[0];
+      }
+
+      if (myProfile) {
+        const detail = await getTrainerDetail(token, myProfile.id);
+        setProfile({
+          id: myProfile.id,
+          name: myProfile.name,
+          email: myProfile.email,
+          picture: `${PROFILE_IMAGE_URL}/${myProfile.id}`,
+          is_online: detail.is_online
+        });
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteVideo = async (videoId: string) => {
+    if (!confirm("Are you sure you want to delete this video?")) return;
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    try {
+      const res = await deleteVideo(token, videoId);
+      if (res.ok) {
+        setVideos((prev) => prev.filter((v) => v.id !== videoId));
+      } else {
+        alert("Failed to delete video");
+      }
+    } catch (e) {
+      alert("Error deleting video");
+    }
+  };
+
+  const handleDeleteTrainee = async (trainee: Trainee) => {
+    if (!confirm(`Remove ${trainee.name} from your team?`)) return;
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    try {
+      const res = await deleteTrainee(token, trainee.id);
+      if (res.ok || res.status === 204) {
+        setTrainees((prev) => prev.filter((t) => t.id !== trainee.id));
+      } else {
+        alert("Failed to remove trainee");
+      }
+    } catch (e) {
+      alert("Error removing trainee");
+    }
+  };
+
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+
+    // Initial fetch and ping
+    fetchProfileData();
+    fetchVideosData();
+    fetchTraineesData();
+    if (token) pingUser(token);
+
+    const interval = setInterval(() => {
+      const token = localStorage.getItem("token");
+      if (token) pingUser(token);
+
+      // Re-fetch data including online status
+      fetchProfileData();
+      fetchVideosData();
+      fetchTraineesData();
+    }, 5000); // 5 seconds poll
+
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <div className="min-h-screen bg-linear-to-br from-violet-50 via-white to-orange-50">
-      {/* Header */}
-      <DashboardHeader role={role} />
-
-      {/* Main Content */}
+      <DashboardHeader role="trainer" user={profile} />
       <main className="max-w-7xl mx-auto px-8 py-10">
-        {/* Hero Section */}
         <div className="mb-10">
           <div className="mb-6">
             <h2 className="text-4xl mb-2">Trainer Dashboard</h2>
             <p className="text-gray-600 text-lg">Manage your members and workout videos</p>
           </div>
-          {/* Trainer Profile Card */}
           <Card className="p-6 bg-white/80 backdrop-blur-sm hover:shadow-xl transition-all duration-300">
             <div className="flex items-center gap-6">
               <div className="relative shrink-0">
                 <div className="absolute -inset-1 bg-linear-to-r from-orange-500 via-pink-500 to-violet-600 rounded-full opacity-75 blur"></div>
                 <Avatar className="h-20 w-20 relative ring-2 ring-white">
-                  <AvatarImage src="https://images.unsplash.com/photo-1567013127542-490d757e51fc?w=400" alt="Panithan FitAddict" />
-                  <AvatarFallback className="text-xl">P</AvatarFallback>
+                  <AvatarImage
+                    src={profile.picture || undefined}
+                    alt={profile.name || "Trainer"}
+                    referrerPolicy="no-referrer"
+                  />
+                  <AvatarFallback className="text-xl">{(profile.name || "T").charAt(0)}</AvatarFallback>
                 </Avatar>
-                <div className="absolute bottom-1 right-1 h-5 w-5 rounded-full border-2 border-white bg-green-500 shadow-lg" />
+                <div
+                  className={`absolute bottom-1 right-1 h-5 w-5 rounded-full border-2 border-white shadow-lg ${profile.is_online ? 'bg-green-500' : 'bg-gray-400'}`}
+                />
               </div>
               <div className="flex-1">
-                <h3 className="text-2xl mb-4">Panithan FitAddict</h3>
+                <h3 className="text-2xl mb-4">{profile.name || "Trainer"}</h3>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-xl bg-orange-100 flex items-center justify-center shrink-0">
                       <Users className="h-5 w-5 text-orange-600" />
                     </div>
                     <div>
-                      <p className="text-2xl">{mockTrainees.length}</p>
+                      <p className="text-2xl">{trainees.length}</p>
                       <p className="text-xs text-gray-600">Members</p>
                     </div>
                   </div>
@@ -102,7 +239,7 @@ export default function TrainerPage() {
                       <Video className="h-5 w-5 text-pink-600" />
                     </div>
                     <div>
-                      <p className="text-2xl">{mockVideos.length}</p>
+                      <p className="text-2xl">{videos.length}</p>
                       <p className="text-xs text-gray-600">Videos</p>
                     </div>
                   </div>
@@ -111,8 +248,8 @@ export default function TrainerPage() {
                       <Calendar className="h-5 w-5 text-violet-600" />
                     </div>
                     <div>
-                      <p className="text-sm">Aug 01 - Sep 01</p>
-                      <p className="text-xs text-gray-600">Usage Period</p>
+                      <p className="text-sm">Active</p>
+                      <p className="text-xs text-gray-600">Status</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
@@ -120,8 +257,8 @@ export default function TrainerPage() {
                       <TrendingUp className="h-5 w-5 text-blue-600" />
                     </div>
                     <div>
-                      <p className="text-2xl">27 days</p>
-                      <p className="text-xs text-gray-600">Until Reset</p>
+                      <p className="text-2xl">-</p>
+                      <p className="text-xs text-gray-600">Rank</p>
                     </div>
                   </div>
                 </div>
@@ -131,91 +268,90 @@ export default function TrainerPage() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Members Section - Compact */}
           <div className="lg:col-span-1">
             <div className="sticky top-24">
               <div className="mb-6">
-                <h3 className="text-2xl mb-2">Members ({mockTrainees.length})</h3>
+                <h3 className="text-2xl mb-2">Members ({trainees.length})</h3>
                 <p className="text-gray-600 text-sm">Quick access</p>
               </div>
-              {/* Invite Section - Compact */}
+
               <Card className="mb-4 p-4 bg-white bg-violet-50 rounded-xl shadow border border-violet-200">
-                <form className="flex flex-col gap-3 items-stretch">
-                  <Input 
-                    placeholder="member@email.com" 
-                    type="email"
-                    className="h-11 text-base border border-gray-200 bg-white rounded-lg shadow-none focus:ring-2 focus:ring-pink-200 w-full px-4"
-                  />
-                  <Button
-                    type="submit"
-                    className="flex items-center justify-center h-11 w-full text-base font-semibold rounded-lg bg-gradient-to-r from-[#FF6A00] via-[#FF3CAC] to-[#784BA0] text-white shadow-none border-0 transition-all duration-200 hover:brightness-105 focus:ring-2 focus:ring-pink-200"
-                  >
-                    <Plus className="h-5 w-5 mr-2" />
-                    Invite Member
-                  </Button>
-                </form>
+                <InviteTrainee onSuccess={() => fetchTraineesData()} />
               </Card>
-              {/* Member List - Compact */}
-              <>
-                {mockTrainees.length > 0 ? (
-                  <div className="space-y-2 max-h-[500px] overflow-y-auto pr-2">
-                    {mockTrainees.map((trainee) => (
-                      <Card
-                        key={trainee.id}
-                        className="group p-3 hover:shadow-lg transition-all duration-300 cursor-pointer border-l-4 border-l-transparent hover:border-l-orange-500 bg-white"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="relative shrink-0">
-                            <Avatar className="h-10 w-10 ring-2 ring-gray-100 group-hover:ring-orange-200 transition-all">
-                              <AvatarImage src={trainee.profileImage} alt={trainee.name} />
-                              <AvatarFallback className="text-sm">{trainee.name.charAt(0)}</AvatarFallback>
-                            </Avatar>
-                            <div className={`absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-white ${trainee.isOnline ? 'bg-green-500' : 'bg-gray-400'}`} />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm truncate group-hover:text-orange-600 transition-colors">{trainee.name}</p>
-                            <div className="flex items-center gap-2 text-xs text-gray-600">
-                              <span>{trainee.stats.currentStreak}d</span>
-                              <span>•</span>
-                              <span>{trainee.stats.averageScore}%</span>
-                            </div>
-                          </div>
+
+              <div className="space-y-2 max-h-[500px] overflow-y-auto pr-2">
+                {trainees.length === 0 ? (
+                  <div className="text-gray-500 text-center py-4">No members yet</div>
+                ) : (
+                  trainees.map((trainee) => (
+                    <Card
+                      key={trainee.id}
+                      className="group p-3 hover:shadow-lg transition-all duration-300 cursor-pointer border-l-4 border-l-transparent hover:border-l-orange-500 bg-white"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="relative shrink-0">
+                          <Avatar className="h-10 w-10 ring-2 ring-gray-100 group-hover:ring-orange-200 transition-all">
+                            <AvatarImage
+                              src={trainee.profile_image || `${PROFILE_IMAGE_URL}/${trainee.id}`}
+                              alt={trainee.name || "Member"}
+                              referrerPolicy="no-referrer"
+                            />
+                            <AvatarFallback className="text-sm">{(trainee.name || "M").charAt(0)}</AvatarFallback>
+                          </Avatar>
+                          <div className={`absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-white ${trainee.is_online ? 'bg-green-500' : 'bg-gray-400'}`} />
                         </div>
-                      </Card>
-                    ))}
-                  </div>
-                ) : null}
-              </>
+                        <div className="flex-1 min-w-0" onClick={() => router.push(`/trainer/trainees/${trainee.id}`)}>
+                          <p className="text-sm truncate group-hover:text-orange-600 transition-colors">{trainee.name || "Unknown Member"}</p>
+                          <p className="text-xs text-gray-500 truncate">{trainee.email}</p>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          className="h-8 w-8 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity bg-transparent flex items-center justify-center"
+                          onClick={(e: any) => { e.stopPropagation(); handleDeleteTrainee(trainee); }}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </Card>
+                  ))
+                )}
+              </div>
             </div>
           </div>
-          {/* Videos Section - Expanded */}
+
           <div className="lg:col-span-2">
             <div className="mb-6 flex items-center justify-between">
               <div>
-                <h3 className="text-2xl mb-2">Video Library ({mockVideos.length})</h3>
+                <h3 className="text-2xl mb-2">Video Library ({videos.length})</h3>
                 <p className="text-gray-600">Manage your workout videos</p>
               </div>
-              <Button 
-                asChild
-              >
-                <Link href="/uploadvideo" className="flex items-center justify-center h-9 px-4 text-sm font-semibold rounded-lg bg-gradient-to-r from-[#FF6A00] via-[#FF3CAC] to-[#784BA0] text-white border-0 shadow-none transition-all duration-200 hover:brightness-105 focus:ring-2 focus:ring-pink-200">
-                  <Upload className="h-4 w-4 mr-2" />
-                  Upload Video
-                </Link>
-              </Button>
+              <Link href="/uploadvideo" className="flex items-center justify-center h-9 px-4 text-sm font-semibold rounded-lg bg-gradient-to-r from-[#FF6A00] via-[#FF3CAC] to-[#784BA0] text-white border-0 shadow-none transition-all duration-200 hover:brightness-105 focus:ring-2 focus:ring-pink-200">
+                <Upload className="h-4 w-4 mr-2" />
+                Upload Video
+              </Link>
             </div>
-            {mockVideos.length > 0 ? (
+            {videos.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
-                {mockVideos.map((video) => (
-                  <Card key={video.id} className="group overflow-hidden hover:shadow-xl transition-all duration-300 border-2 border-gray-300 rounded-2xl">
+                {videos.map((video) => (
+                  <Card key={video.id} className="group overflow-hidden hover:shadow-xl transition-all duration-300 border-2 border-gray-300 rounded-2xl relative">
+                    <button
+                      onClick={(e) => { e.preventDefault(); handleDeleteVideo(video.id); }}
+                      className="absolute top-2 left-2 z-20 p-2 bg-black/50 hover:bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-all duration-200"
+                      title="Delete Video"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+
                     <div className="relative h-48 bg-gradient-to-br from-gray-200 to-gray-300 overflow-hidden">
-                      <img 
-                        src={video.thumbnail} 
-                        alt={video.name}
+                      <video
+                        src={video.s3_url}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        muted
+                        onMouseOver={(e: any) => e.currentTarget.play()}
+                        onMouseOut={(e: any) => { e.currentTarget.pause(); e.currentTarget.currentTime = 0; }}
                       />
-                      <Badge className="absolute top-3 right-3 bg-emerald-500 text-white border-0 shadow-lg px-3 py-1 rounded-full">
-                        Active
+                      <Badge className={`absolute top-3 right-3 border-0 shadow-lg px-3 py-1 rounded-full ${video.status === 'Active' ? 'bg-emerald-500' : 'bg-gray-500'} text-white`}>
+                        {video.status}
                       </Badge>
                     </div>
                     <div className="p-5">
@@ -225,23 +361,16 @@ export default function TrainerPage() {
                           <Clock className="h-4 w-4 text-blue-500" />
                           <span>{video.duration}</span>
                         </div>
-                        <div className="flex items-center gap-1.5">
-                          <Flame className="h-4 w-4 text-orange-500" />
-                          <span>{video.calories} kcal</span>
-                        </div>
-                        <Badge variant="secondary" className="text-xs">
+                        {video.calories && (
+                          <div className="flex items-center gap-1.5">
+                            <Flame className="h-4 w-4 text-orange-500" />
+                            <span>{video.calories} kcal</span>
+                          </div>
+                        )}
+                        <Badge className="text-xs bg-gray-100 text-gray-800">
                           Level {video.level}
                         </Badge>
                       </div>
-                      {video.averageScore !== null ? (
-                        <div className="text-sm text-gray-600">
-                          Avg Score: <strong className="text-gray-900">{video.averageScore}%</strong>
-                        </div>
-                      ) : (
-                        <div className="text-sm text-gray-400 italic">
-                          No scores yet
-                        </div>
-                      )}
                     </div>
                   </Card>
                 ))}
@@ -255,16 +384,10 @@ export default function TrainerPage() {
                 <p className="text-gray-500 mb-6 max-w-md mx-auto">
                   Upload your first workout video to start building your video library
                 </p>
-                <Button 
-                  asChild
-                  className="bg-linear-to-r from-orange-500 via-pink-500 to-violet-600 hover:shadow-xl"
-                  size="lg"
-                >
-                  <Link href="/uploadvideo" className="flex items-center justify-center h-11 px-6 text-base font-semibold rounded-lg text-white">
-                    <Upload className="h-5 w-5 mr-2" />
-                    Upload First Video
-                  </Link>
-                </Button>
+                <Link href="/uploadvideo" className="flex items-center justify-center h-11 px-6 text-base font-semibold rounded-lg text-white bg-linear-to-r from-orange-500 via-pink-500 to-violet-600 hover:shadow-xl inline-flex">
+                  <Upload className="h-5 w-5 mr-2" />
+                  Upload First Video
+                </Link>
               </Card>
             )}
           </div>
