@@ -1,82 +1,101 @@
 "use client";
 import React, { useState } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000";
 
 export default function AdminLogin() {
+  const router = useRouter();
+
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
+  const [error, setError] = useState<string>("");
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError("");
     setLoading(true);
-    // --- เชื่อมต่อ backend ---
-    /*
+
     try {
-      const res = await fetch("http://localhost:8000/admin/login", {
+      const res = await fetch(`${API_BASE}/admin/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password }),
       });
-      const data = await res.json();
-      if (res.ok && data.token) {
-        localStorage.setItem("admin_token", data.token);
-        window.location.href = "/admin";
-      } else {
-        setError(data.detail || "Login failed");
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        throw new Error(data?.detail || data?.message || "Login failed");
       }
-    } catch {
-      setError("Network error");
-    }
-    setLoading(false);
-    */
-    // --- END เชื่อมต่อ backend ---
-    setTimeout(() => {
+
+      // รองรับชื่อ field token หลายแบบ เผื่อ backend ส่ง access_token
+      const token = data?.token || data?.access_token;
+      if (!token) throw new Error("Missing token in response");
+
+      localStorage.setItem("admin_token", token);
+      router.replace("/admin");
+    } catch (err: any) {
+      setError(err?.message || "Network error");
+    } finally {
       setLoading(false);
-      setError("(Demo only) Backend not connected.");
-    }, 1000);
+    }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-indigo-50 to-indigo-100">
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-8 flex flex-col items-center relative border border-indigo-100">
-        <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-white rounded-full w-16 h-16 flex items-center justify-center shadow-md">
-          <img src="/Logo_FitAddicttest.png" alt="FitAddict Logo" className="w-12 h-12 object-contain rounded-xl" />
-        </div>
-        <h2 className="text-center font-extrabold text-2xl bg-gradient-to-r from-indigo-600 via-fuchsia-600 to-purple-500 bg-clip-text text-transparent mt-10 mb-8 tracking-wide">Admin Login</h2>
-        <form onSubmit={handleSubmit} className="w-full">
-          <div className="mb-6 flex flex-col gap-1">
-            <label className="font-bold text-indigo-500 text-base mb-1">Username</label>
-            <input
-              type="text"
-              value={username}
-              onChange={e => setUsername(e.target.value)}
-              required
-              className="w-full h-12 px-4 rounded-lg border border-indigo-300 text-base bg-indigo-50 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-400"
-            />
-          </div>
-          <div className="mb-6 flex flex-col gap-1">
-            <label className="font-bold text-indigo-500 text-base mb-1">Password</label>
-            <input
-              type="password"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              required
-              className="w-full h-12 px-4 rounded-lg border border-indigo-300 text-base bg-indigo-50 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-400"
-            />
-          </div>
-          {error && (
-            <div className="text-red-500 font-semibold text-center mb-4 text-sm">{typeof error === "string" ? error : (error.message || "เกิดข้อผิดพลาด")}</div>
-          )}
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-3 rounded-xl bg-gradient-to-r from-purple-500 via-fuchsia-500 to-indigo-500 text-white font-extrabold text-lg shadow-md transition hover:scale-[1.02] active:scale-100 disabled:opacity-60"
-          >
-            {loading ? "Logging in..." : "Login"}
-          </button>
-        </form>
-      </div>
+    <div className="fitaddict-bg">
+      <nav className="fitaddict-navbar">
+        <div className="fitaddict-logo">FitAddict</div>
+        <ul className="fitaddict-navlinks">
+          <li>
+            <Link href="/">Home</Link>
+          </li>
+          <li>
+            <Link href="/login">Sign In</Link>
+          </li>
+        </ul>
+      </nav>
+
+      <main className="fitaddict-main">
+        <section className="fitaddict-hero">
+          <h1>
+            Admin <span>Login</span>
+          </h1>
+          <p>Sign in to manage users and videos</p>
+
+          {error ? <div className="au-alert">{error}</div> : null}
+
+          <form onSubmit={handleSubmit} style={{ maxWidth: 520, margin: "0 auto" }}>
+            <div style={{ display: "grid", gap: "0.65rem", textAlign: "left" }}>
+              <label style={{ fontWeight: 800, color: "#64748b" }}>Username</label>
+              <input
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                required
+                className="au-input"
+                placeholder="admin"
+              />
+
+              <label style={{ fontWeight: 800, color: "#64748b", marginTop: "0.35rem" }}>Password</label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                className="au-input"
+                placeholder="••••••••"
+              />
+
+              <button type="submit" disabled={loading} className="fitaddict-btn" style={{ width: "100%" }}>
+                {loading ? "Logging in..." : "Login"}
+              </button>
+            </div>
+          </form>
+        </section>
+      </main>
     </div>
   );
 }

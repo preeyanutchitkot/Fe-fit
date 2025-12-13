@@ -230,3 +230,300 @@ body, html {
   background: none;
   letter-spacing: 0.01em;
 }
+
+/* Admin Users (Fe-fit) */
+.fitaddict-navlinks li a.active {
+  background: #ede9fe;
+  color: #a855f7;
+  box-shadow: 0 2px 8px rgba(168,85,247,0.10);
+}
+
+.au-content {
+  margin-top: 1.8rem;
+  text-align: left;
+}
+
+.au-alert {
+  background: rgba(255, 255, 255, 0.9);
+  border: 1.5px solid #ede9fe;
+  border-radius: 18px;
+  padding: 0.9rem 1.1rem;
+  color: #475569;
+  margin: 0 auto 1rem;
+  max-width: 900px;
+}
+
+.au-controlbar {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr auto;
+  gap: 0.9rem;
+  align-items: center;
+  margin: 0 auto 0.9rem;
+  max-width: 900px;
+}
+
+.au-input {
+  height: 48px;
+  border-radius: 16px;
+  border: 1.5px solid #ede9fe;
+  background: rgba(255,255,255,0.92);
+  padding: 0 1rem;
+  font-size: 1.02rem;
+  outline: none;
+  box-shadow: 0 2px 12px rgba(168,85,247,0.08);
+}
+
+.au-input:focus {
+  border-color: #a855f7;
+  box-shadow: 0 0 0 3px rgba(168,85,247,0.14), 0 2px 12px rgba(168,85,247,0.10);
+}
+
+.au-msg {
+  margin: 0.3rem auto 1.1rem;
+  max-width: 900px;
+  color: #475569;
+  font-weight: 600;
+}
+
+.au-msg--error {
+  color: #334155;
+}
+
+.au-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+  margin: 1.2rem auto 1.4rem;
+  max-width: 900px;
+}
+
+.au-stat {
+  background: rgba(255,255,255,0.92);
+  border: 1.5px solid #ede9fe;
+  border-radius: 22px;
+  padding: 1.1rem 1.2rem;
+  box-shadow: 0 8px 32px 0 rgba(30,41,59,0.10), 0 2px 8px 0 rgba(168,85,247,0.08);
+}
+
+.au-stat__label {
+  color: #64748b;
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.au-stat__value {
+  font-weight: 900;
+  font-size: 1.8rem;
+  color: #1e293b;
+  margin-top: 0.2rem;
+}
+
+.au-panel {
+  background: rgba(255,255,255,0.90);
+  border-radius: 24px;
+  border: 1.5px solid #ede9fe;
+  box-shadow: 0 8px 32px 0 rgba(30,41,59,0.10), 0 2px 8px 0 rgba(168,85,247,0.08);
+  padding: 1.1rem 1.1rem 1.2rem;
+  margin: 0 auto 1.2rem;
+  max-width: 900px;
+}
+
+.au-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0.2rem 0.2rem 0.8rem;
+}
+
+.au-section-header h2 {
+  font-size: 1.22rem;
+  font-weight: 900;
+  color: #1e293b;
+}
+
+.au-section-header h2 span {
+  color: #64748b;
+  font-weight: 800;
+}
+
+.au-loading,
+.au-empty {
+  text-align: center;
+  color: #64748b;
+  font-weight: 700;
+  padding: 1.2rem 0.8rem;
+}
+
+.au-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.au-trainer-row {
+  display: flex;
+  gap: 0.9rem;
+  align-items: center;
+  background: rgba(255,255,255,0.92);
+  border: 1.5px solid #ede9fe;
+  border-radius: 20px;
+  padding: 0.9rem 1rem;
+  box-shadow: 0 2px 12px rgba(168,85,247,0.07);
+}
+
+.au-avatar {
+  width: 52px;
+  height: 52px;
+  border-radius: 999px;
+  background: #f8fafc;
+  border: 2px solid #ede9fe;
+  position: relative;
+  overflow: hidden;
+  flex: 0 0 auto;
+}
+
+.au-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.au-online,
+.au-offline {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  border: 2px solid rgba(255,255,255,0.95);
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+}
+
+.au-online {
+  background: #a855f7;
+}
+
+.au-offline {
+  background: #64748b;
+}
+
+.au-trainer-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.au-trainer-name {
+  font-weight: 900;
+  font-size: 1.08rem;
+  color: #1e293b;
+  margin-bottom: 0.35rem;
+}
+
+.au-trainer-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  align-items: center;
+}
+
+.au-pill {
+  background: #ede9fe;
+  color: #7c3aed;
+  border-radius: 999px;
+  padding: 0.2rem 0.65rem;
+  font-weight: 800;
+  font-size: 0.88rem;
+}
+
+.au-muted {
+  color: #64748b;
+  font-weight: 700;
+  font-size: 0.92rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 420px;
+}
+
+.au-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 0.9rem;
+}
+
+.au-card {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  background: rgba(255,255,255,0.92);
+  border: 1.5px solid #ede9fe;
+  border-radius: 20px;
+  padding: 0.85rem 0.95rem;
+  box-shadow: 0 2px 12px rgba(168,85,247,0.07);
+}
+
+.au-card__avatar {
+  width: 46px;
+  height: 46px;
+  border-radius: 999px;
+  background: #f8fafc;
+  border: 2px solid #ede9fe;
+  overflow: hidden;
+  flex: 0 0 auto;
+}
+
+.au-card__avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.au-card__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.au-card__name {
+  font-weight: 900;
+  color: #1e293b;
+  margin-bottom: 0.2rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.au-card__meta {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.au-card__role {
+  background: #ede9fe;
+  color: #7c3aed;
+  border-radius: 999px;
+  padding: 0.15rem 0.55rem;
+  font-weight: 800;
+  font-size: 0.82rem;
+}
+
+.au-card__email {
+  color: #64748b;
+  font-weight: 700;
+  font-size: 0.92rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 180px;
+}
+
+@media (max-width: 860px) {
+  .au-controlbar {
+    grid-template-columns: 1fr;
+  }
+  .au-stats {
+    grid-template-columns: 1fr;
+  }
+}
