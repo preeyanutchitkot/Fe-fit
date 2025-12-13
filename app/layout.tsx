@@ -26,6 +26,7 @@ export default function RootLayout({
     <html lang="en">
       <head>
         <meta name="theme-color" content="#a855f7" />
+        <meta name="referrer" content="no-referrer-when-downgrade" />
         <link href="https://fonts.googleapis.com/css2?family=Google+Sans+Flex:wght@400;500;700&display=swap" rel="stylesheet" />
       </head>
       <body
