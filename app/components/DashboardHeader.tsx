@@ -59,7 +59,7 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({ role, user }) => {
                 src={displayImage}
                 alt={displayName}
                 className="w-12 h-12 rounded-full object-cover border-2 border-white shadow"
-                onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                onError={(e) => { e.currentTarget.src = '/user (4).png'; }}
                 referrerPolicy="no-referrer"
               />
             ) : (

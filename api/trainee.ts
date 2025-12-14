@@ -26,3 +26,5 @@ export async function getTrainerVideos(token: string, trainerId: string) {
     if (!res.ok) throw new Error("Failed to load videos");
     return await res.json();
 }
+
+

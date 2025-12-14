@@ -1,6 +1,7 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import { Card } from "./ui/card";
+import VideoCard from "@/app/components/VideoCard";
 import { Button } from "./ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { Badge } from "./ui/badge";
@@ -11,8 +12,6 @@ import {
   Video,
   Calendar,
   Upload,
-  Clock,
-  Flame,
   TrendingUp,
   Trash2,
 } from "lucide-react";
@@ -68,7 +67,7 @@ export default function TrainerPage() {
           }
 
           let status = "";
-          if (v.description?.includes("draft:true")) status = "draft";
+          if (v.description?.includes("draft:true")) status = "Draft";
           else if (v.rejected) status = "Rejected";
           else if (v.approved) status = "Active";
           else status = "Verifying";
@@ -87,7 +86,16 @@ export default function TrainerPage() {
             durationStr = v.duration;
           }
 
-          return { ...v, s3_url: url, thumbnail: url, status, calories: kcal, duration: durationStr, level: v.level || 1 };
+          return {
+            ...v,
+            name: v.title || v.name || "Untitled Video",
+            s3_url: url,
+            thumbnail: url,
+            status,
+            calories: kcal,
+            duration: durationStr,
+            level: v.difficulty || v.level || 1
+          };
         })
         : [];
       setVideos(vids);
@@ -323,6 +331,9 @@ export default function TrainerPage() {
             <div className="mb-6 flex items-center justify-between">
               <div>
                 <h3 className="text-2xl mb-2">Video Library ({videos.length})</h3>
+                <Link href="/trainer/videos" className="text-sm text-violet-600 font-semibold hover:underline">
+                  Manage / See All
+                </Link>
                 <p className="text-gray-600">Manage your workout videos</p>
               </div>
               <Link href="/uploadvideo" className="flex items-center justify-center h-9 px-4 text-sm font-semibold rounded-lg bg-gradient-to-r from-[#FF6A00] via-[#FF3CAC] to-[#784BA0] text-white border-0 shadow-none transition-all duration-200 hover:brightness-105 focus:ring-2 focus:ring-pink-200">
@@ -333,46 +344,11 @@ export default function TrainerPage() {
             {videos.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
                 {videos.map((video) => (
-                  <Card key={video.id} className="group overflow-hidden hover:shadow-xl transition-all duration-300 border-2 border-gray-300 rounded-2xl relative">
-                    <button
-                      onClick={(e) => { e.preventDefault(); handleDeleteVideo(video.id); }}
-                      className="absolute top-2 left-2 z-20 p-2 bg-black/50 hover:bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-all duration-200"
-                      title="Delete Video"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-
-                    <div className="relative h-48 bg-gradient-to-br from-gray-200 to-gray-300 overflow-hidden">
-                      <video
-                        src={video.s3_url}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        muted
-                        onMouseOver={(e: any) => e.currentTarget.play()}
-                        onMouseOut={(e: any) => { e.currentTarget.pause(); e.currentTarget.currentTime = 0; }}
-                      />
-                      <Badge className={`absolute top-3 right-3 border-0 shadow-lg px-3 py-1 rounded-full ${video.status === 'Active' ? 'bg-emerald-500' : 'bg-gray-500'} text-white`}>
-                        {video.status}
-                      </Badge>
-                    </div>
-                    <div className="p-5">
-                      <h4 className="text-lg mb-3 truncate group-hover:text-violet-600 transition-colors">{video.name}</h4>
-                      <div className="flex items-center gap-4 text-sm text-gray-600 mb-3">
-                        <div className="flex items-center gap-1.5">
-                          <Clock className="h-4 w-4 text-blue-500" />
-                          <span>{video.duration}</span>
-                        </div>
-                        {video.calories && (
-                          <div className="flex items-center gap-1.5">
-                            <Flame className="h-4 w-4 text-orange-500" />
-                            <span>{video.calories} kcal</span>
-                          </div>
-                        )}
-                        <Badge className="text-xs bg-gray-100 text-gray-800">
-                          Level {video.level}
-                        </Badge>
-                      </div>
-                    </div>
-                  </Card>
+                  <VideoCard
+                    key={video.id}
+                    video={video}
+                    onDelete={handleDeleteVideo}
+                  />
                 ))}
               </div>
             ) : (

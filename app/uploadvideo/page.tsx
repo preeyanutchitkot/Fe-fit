@@ -1,14 +1,21 @@
 "use client";
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import DashboardHeader from "../components/DashboardHeader";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Head from "next/head";
-import { uploadVideo } from "@/api/trainer";
+import { uploadVideo, updateVideo, updateVideoFile, getVideo, resubmitVideo } from "@/api/trainer";
+import KeypointOverlay from "../components/KeypointOverlay";
 
 export default function UploadVideoPage() {
-  const [submittingDraft, setSubmittingDraft] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // New refs for KeypointOverlay
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+
+  const [submittingDraft, setSubmittingDraft] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [fileURL, setFileURL] = useState("");
   const [name, setName] = useState("");
@@ -20,8 +27,52 @@ export default function UploadVideoPage() {
   const [originalVideo, setOriginalVideo] = useState<any>(null);
   const [levelOpen, setLevelOpen] = useState(false);
 
-  // Simulate edit mode (replace with your logic)
-  const isEdit = false;
+  // Edit mode logic
+  const editId = searchParams.get("editId");
+  const isEdit = Boolean(editId);
+
+  // ==================== EFFECTS ====================
+  useEffect(() => {
+    if (!isEdit || !editId) return;
+
+    // Fetch from backend
+    (async () => {
+      try {
+        const token = localStorage.getItem("token");
+        if (!token) return;
+
+        setIsLoading(true);
+        const v = await getVideo(token, editId);
+
+        setName(v.title || "");
+        setLevel(String(v.difficulty || "1"));
+
+        // Extract kcal from description if needed, or use v.kcal if backend sends it separately
+        let extractedKcal = "";
+        const match = typeof v.description === "string" ? v.description.match(/kcal:(\d+)/) : null;
+
+        if (match) {
+          extractedKcal = match[1];
+        } else if (v.kcal !== undefined && v.kcal !== null) {
+          extractedKcal = v.kcal;
+        }
+        setKcal(extractedKcal);
+
+        // Handle URL
+        const url = v.s3_url
+          ? (/^https?:\/\//i.test(v.s3_url)
+            ? v.s3_url
+            : `${process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000"}/static/${v.s3_url.replace(/^.*[\\\/]/, "")}`)
+          : "";
+        setFileURL(url);
+        setOriginalVideo(v);
+      } catch (e) {
+        console.error("Failed to fetch video details", e);
+      } finally {
+        setIsLoading(false);
+      }
+    })();
+  }, [isEdit, editId]);
 
   const onPick = () => fileRef.current?.click();
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -40,10 +91,16 @@ export default function UploadVideoPage() {
   const onDragOver = (e: React.DragEvent<HTMLDivElement>) => e.preventDefault();
 
   const handleSaveDraft = async () => {
-    if (!file || !name) {
-      alert("กรุณาเลือกไฟล์และกรอกชื่อวิดีโอ");
+    if (!file && !isEdit) { // Require file for new drafts
+      if (!file || !name) {
+        alert("กรุณาเลือกไฟล์และกรอกชื่อวิดีโอ");
+        return;
+      }
+    } else if (isEdit && !name) { // For edit, file is optional but name is required
+      alert("กรุณากรอกชื่อวิดีโอ");
       return;
     }
+
     const token = localStorage.getItem("token");
     if (!token) {
       alert("No authentication token found");
@@ -54,21 +111,36 @@ export default function UploadVideoPage() {
     setIsLoading(true);
 
     try {
-      const formData = new FormData();
-      formData.append("title", name);
-      formData.append("difficulty", level);
-      formData.append("description", `kcal:${kcal || 0} draft:true`);
-      formData.append("approved", "false");
-      formData.append("segments", "[]");
-      formData.append("file", file);
+      if (isEdit && editId) {
+        await updateVideo(token, editId, {
+          title: name,
+          difficulty: level,
+          description: `kcal:${kcal || 0};draft:true`,
+        });
+        // If file changed
+        if (file) {
+          const fd = new FormData();
+          fd.append("file", file);
+          await updateVideoFile(token, editId, fd);
+        }
+      } else {
+        // Create new draft
+        const formData = new FormData();
+        formData.append("title", name);
+        formData.append("difficulty", level);
+        formData.append("description", `kcal:${kcal || 0};draft:true`);
+        formData.append("approved", "false");
+        formData.append("segments", "[]");
+        if (file) formData.append("file", file);
 
-      await uploadVideo(token, formData);
+        await uploadVideo(token, formData);
+      }
 
       alert("บันทึก draft สำเร็จ!");
       router.push("/trainer");
     } catch (e: any) {
-      console.error("Upload error:", e);
-      alert("Upload failed: " + (e.message || "Unknown error"));
+      console.error("Draft error:", e);
+      alert("Save draft failed: " + (e.message || "Unknown error"));
     } finally {
       setSubmittingDraft(false);
       setIsLoading(false);
@@ -87,20 +159,19 @@ export default function UploadVideoPage() {
     }
 
     setSubmitting(true);
-    setIsLoading(true);
 
     try {
       const formData = new FormData();
       formData.append("title", name);
       formData.append("difficulty", level);
-      formData.append("description", `kcal:${kcal || 0}`);
+      formData.append("description", `kcal:${kcal || 0};verifying:true`);
       formData.append("approved", "false");
       formData.append("segments", "[]");
       formData.append("file", file);
 
       await uploadVideo(token, formData);
 
-      alert("Upload successful! Video is confirming.");
+      alert("กำลังตรวจสอบ (verifying)... คลิปจะเข้าสู่สถานะ Pending");
       router.push("/trainer");
     } catch (e: any) {
       console.error("Upload error:", e);
@@ -110,6 +181,51 @@ export default function UploadVideoPage() {
       setIsLoading(false);
     }
   };
+
+  const handleUpdate = async () => {
+    if (!name) {
+      alert("กรุณากรอกชื่อวิดีโอ");
+      return;
+    }
+    const token = localStorage.getItem("token");
+    if (!token) {
+      alert("No authentication token found");
+      return;
+    }
+    if (submitting) return;
+    setSubmitting(true);
+
+    try {
+      // 1) Update metadata
+      await updateVideo(token, editId!, {
+        title: name,
+        difficulty: level,
+        description: `kcal:${kcal};verifying:true`,
+      });
+
+      // 2) If file new -> update file
+      if (file) {
+        const fd = new FormData();
+        fd.append("file", file);
+        await updateVideoFile(token, editId!, fd);
+      }
+
+      // 3) Resubmit if rejected
+      if (originalVideo?.rejected) {
+        await resubmitVideo(token, editId!);
+        alert('อัปเดตและส่งให้แอดมินตรวจสอบอีกครั้งแล้ว (กลับสู่คิว Verifying/Pending)');
+      } else {
+        alert('อัปเดตเรียบร้อย');
+      }
+      router.push('/trainer');
+
+    } catch (e: any) {
+      console.error("Update error:", e);
+      alert("Update failed: " + (e.message || e));
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   const handleDiscard = () => {
     if (window.confirm('Discard changes and go back to Trainer page?')) router.push('/trainer');
@@ -123,7 +239,7 @@ export default function UploadVideoPage() {
   const levelRef = useRef<HTMLDivElement>(null);
 
   // Close dropdown when clicking outside
-  React.useEffect(() => {
+  useEffect(() => {
     function handleClick(e: MouseEvent) {
       if (levelRef.current && !levelRef.current.contains(e.target as Node)) {
         setLevelOpen(false);
@@ -135,6 +251,22 @@ export default function UploadVideoPage() {
     return () => document.removeEventListener("mousedown", handleClick);
   }, [levelOpen]);
 
+  // Header User logic
+  const [user, setUser] = useState<{ name: string, picture?: string } | undefined>(undefined);
+
+  useEffect(() => {
+    try {
+      const userData = localStorage.getItem("user");
+      if (userData) {
+        const userObj = JSON.parse(userData);
+        setUser({
+          name: userObj.name,
+          picture: userObj.picture
+        });
+      }
+    } catch { }
+  }, []);
+
   return (
     <>
       <Head>
@@ -144,7 +276,7 @@ export default function UploadVideoPage() {
         className="min-h-screen bg-gradient-to-br from-[#f8fafc] to-[#e2e8f0] font-sans relative"
         style={{ fontFamily: '"Google Sans Flex", Arial, sans-serif' }}
       >
-        {isLoading && (
+        {(isLoading || submitting || submittingDraft) && (
           <div className="fixed inset-0 w-screen h-screen bg-black/35 z-[9999] flex items-center justify-center">
             <div className="bg-white px-12 py-8 rounded-2xl shadow-2xl flex flex-col items-center">
               <div className="text-[22px] font-bold text-purple-500 mb-3">
@@ -154,14 +286,14 @@ export default function UploadVideoPage() {
                 Please wait while keypoints are being extracted and saved.
               </div>
               <div className="mt-2">
-                <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+                <svg className="animate-spin" width="48" height="48" viewBox="0 0 48 48" fill="none">
                   <circle cx="24" cy="24" r="20" stroke="#a855f7" strokeWidth="6" strokeDasharray="100" strokeDashoffset="60" />
                 </svg>
               </div>
             </div>
           </div>
         )}
-        <DashboardHeader role="trainer" />
+        <DashboardHeader role="trainer" user={user} />
         <div className="max-w-[1200px] mx-auto mt-3 mb-2 flex items-center">
           <button
             onClick={() => router.push("/trainer")}
@@ -285,23 +417,18 @@ export default function UploadVideoPage() {
                 </div>
               </div>
               <div className="flex gap-3 mt-6">
-                {isEdit ? (
-                  <button
-                    onClick={handleCreate}
-                    disabled={submitting}
-                    className={`bg-gradient-to-r from-pink-500 to-purple-500 text-white font-bold border-none rounded-lg px-4 py-2 cursor-pointer ${submitting ? "opacity-70 cursor-not-allowed" : ""}`}
-                  >
-                    {submitting ? "Updating..." : "Update"}
-                  </button>
-                ) : (
-                  <button
-                    onClick={handleCreate}
-                    disabled={submitting}
-                    className={`bg-gradient-to-r from-pink-500 to-purple-500 text-white font-bold border-none rounded-lg px-4 py-2 cursor-pointer inline-flex items-center gap-2 ${submitting ? "opacity-70 cursor-not-allowed" : ""}`}
-                  >
-                    {submitting ? "Uploading..." : "Public"}
-                  </button>
-                )}
+                <button
+                  onClick={() => {
+                    const status = isEdit && !originalVideo?.approved ? 'verifying' : 'active';
+                    if (window.confirm(isEdit ? "Update and submit?" : "ต้องรอ admin อนุมัติคลิปก่อนจึงจะเป็น Active\nกดยืนยันเพื่อส่งคลิปเข้าสู่สถานะ Pending")) {
+                      isEdit ? handleUpdate() : handleCreate();
+                    }
+                  }}
+                  disabled={submitting}
+                  className={`bg-gradient-to-r from-pink-500 to-purple-500 text-white font-bold border-none rounded-lg px-4 py-2 cursor-pointer inline-flex items-center gap-2 ${submitting ? "opacity-70 cursor-not-allowed" : ""}`}
+                >
+                  {submitting ? (isEdit ? "Updating..." : "Uploading...") : (isEdit ? "Public" : "Public")}
+                </button>
                 <button
                   onClick={handleSaveDraft}
                   disabled={submittingDraft}
@@ -325,22 +452,39 @@ export default function UploadVideoPage() {
                 </div>
               )}
             </div>
-            <div className="bg-white rounded-2xl shadow-md p-4 min-h-[300px] flex items-center justify-center">
+            <div className="bg-white rounded-2xl shadow-md p-4 min-h-[300px] flex items-center justify-center relative overflow-hidden">
               {!fileURL || !preview ? (
                 <div className="w-full h-80 rounded-xl bg-gray-200 flex items-center justify-center text-gray-500">
                   {preview ? "No video selected" : "Preview area"}
                 </div>
               ) : (
-                <video
-                  src={fileURL}
-                  controls
-                  className="w-full h-full max-h-80 object-contain rounded-xl bg-white block"
-                />
+                <div className="relative w-full h-full max-h-80 flex items-center justify-center">
+                  <video
+                    ref={videoRef}
+                    src={fileURL}
+                    controls
+                    autoPlay
+                    muted
+                    loop
+                    crossOrigin={fileURL.startsWith("blob:") ? "anonymous" : undefined}
+                    className="w-full h-full max-h-80 object-contain rounded-xl bg-white block"
+                    onPlay={() => setIsPlaying(true)}
+                    onPause={() => setIsPlaying(false)}
+                    onEnded={() => setIsPlaying(false)}
+                  />
+                  {fileURL.startsWith("blob:") && (
+                    <KeypointOverlay
+                      videoRef={videoRef}
+                      isPlaying={isPlaying}
+                      mirrorKeypoints={false}
+                    />
+                  )}
+                </div>
               )}
             </div>
           </div>
         </div>
-      </div>
+      </div >
     </>
   );
 }
