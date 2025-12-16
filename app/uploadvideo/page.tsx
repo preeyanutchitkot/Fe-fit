@@ -5,6 +5,14 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Head from "next/head";
 import { uploadVideo, updateVideo, updateVideoFile, getVideo, resubmitVideo } from "@/api/trainer";
 import KeypointOverlay from "../components/KeypointOverlay";
+import JointSelector from "../components/JointSelector";
+
+const exerciseNames = [
+  "Squat", "Lunge", "Glute Bridge", "Calf Raise", "Wall Sit",
+  "Side Lunge", "Push-up", "Tricep Dips", "Arm Circles", "Pike Push-up",
+  "Shadow Boxing", "Plank", "Crunches", "Sit-up", "Leg Raise",
+  "Russian Twist", "Bicycle Crunches", "Superman", "Jumping Jacks", "Mountain Climbers"
+];
 
 export default function UploadVideoPage() {
   const router = useRouter();
@@ -20,12 +28,15 @@ export default function UploadVideoPage() {
   const [fileURL, setFileURL] = useState("");
   const [name, setName] = useState("");
   const [level, setLevel] = useState("1");
+  const [exerciseFamily, setExerciseFamily] = useState("");
+  const [selectedJoints, setSelectedJoints] = useState<string[]>([]);
   const [kcal, setKcal] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [preview, setPreview] = useState(true);
   const [originalVideo, setOriginalVideo] = useState<any>(null);
   const [levelOpen, setLevelOpen] = useState(false);
+  const [exerciseFamilyOpen, setExerciseFamilyOpen] = useState(false);
 
   // Edit mode logic
   const editId = searchParams.get("editId");
@@ -49,14 +60,60 @@ export default function UploadVideoPage() {
 
         // Extract kcal from description if needed, or use v.kcal if backend sends it separately
         let extractedKcal = "";
-        const match = typeof v.description === "string" ? v.description.match(/kcal:(\d+)/) : null;
-
-        if (match) {
-          extractedKcal = match[1];
-        } else if (v.kcal !== undefined && v.kcal !== null) {
+        if (v.kcal !== undefined && v.kcal !== null) {
           extractedKcal = v.kcal;
+        } else if (typeof v.description === "string") {
+          const match = v.description.match(/kcal:(\d+)/);
+          if (match) extractedKcal = match[1];
         }
         setKcal(extractedKcal);
+
+        // Extract exercise family
+        let extractedExercise = v.exercise_family || "";
+        if (!extractedExercise) {
+          const exMatch = typeof v.description === "string" ? v.description.match(/exercise:([^;]+)/) : null;
+          if (exMatch) extractedExercise = exMatch[1];
+        }
+        setExerciseFamily(extractedExercise);
+
+        // Extract joints
+        let extractedJoints: string[] = [];
+
+        if (v.important_joints) {
+          if (Array.isArray(v.important_joints)) {
+            // Check if it's string[] or object[]
+            if (v.important_joints.length > 0 && typeof v.important_joints[0] === 'object') {
+              extractedJoints = v.important_joints.map((j: any) => j.jointName);
+            } else {
+              extractedJoints = v.important_joints;
+            }
+          } else if (typeof v.important_joints === 'string') {
+            // Handle potential JSON string or comma-separated string
+            try {
+              const parsed = JSON.parse(v.important_joints);
+              if (Array.isArray(parsed)) {
+                if (parsed.length > 0 && typeof parsed[0] === 'object') {
+                  extractedJoints = parsed.map((j: any) => j.jointName);
+                } else {
+                  extractedJoints = parsed;
+                }
+              } else {
+                extractedJoints = v.important_joints.split(",");
+              }
+            } catch {
+              extractedJoints = v.important_joints.split(",");
+            }
+          }
+        }
+
+        // Fallback to description (only if nothing found in column)
+        if (extractedJoints.length === 0) {
+          const jointsMatch = typeof v.description === "string" ? v.description.match(/joints:([^;]+)/) : null;
+          if (jointsMatch) {
+            extractedJoints = jointsMatch[1].split(",");
+          }
+        }
+        setSelectedJoints(extractedJoints);
 
         // Handle URL
         const url = v.s3_url
@@ -111,12 +168,21 @@ export default function UploadVideoPage() {
     setIsLoading(true);
 
     try {
+      // Construct payload with Schema: { jointName: string, weight: number }[]
+      const structuredJoints = selectedJoints.map(j => ({
+        jointName: j,
+        weight: 1.0
+      }));
+
       if (isEdit && editId) {
-        await updateVideo(token, editId, {
+        const payload: any = {
           title: name,
           difficulty: level,
+          exercise_family: exerciseFamily,
+          important_joints: structuredJoints, // Send as object array
           description: `kcal:${kcal || 0};draft:true`,
-        });
+        };
+        await updateVideo(token, editId, payload);
         // If file changed
         if (file) {
           const fd = new FormData();
@@ -128,6 +194,8 @@ export default function UploadVideoPage() {
         const formData = new FormData();
         formData.append("title", name);
         formData.append("difficulty", level);
+        formData.append("exercise_family", exerciseFamily);
+        formData.append("important_joints", JSON.stringify(structuredJoints)); // Send as JSON string
         formData.append("description", `kcal:${kcal || 0};draft:true`);
         formData.append("approved", "false");
         formData.append("segments", "[]");
@@ -161,10 +229,18 @@ export default function UploadVideoPage() {
     setSubmitting(true);
 
     try {
+      // Construct payload with Schema: { jointName: string, weight: number }[]
+      const structuredJoints = selectedJoints.map(j => ({
+        jointName: j,
+        weight: 1.0
+      }));
+
       const formData = new FormData();
       formData.append("title", name);
       formData.append("difficulty", level);
-      formData.append("description", `kcal:${kcal || 0};verifying:true`);
+      formData.append("exercise_family", exerciseFamily);
+      formData.append("important_joints", JSON.stringify(structuredJoints));
+      formData.append("description", `kcal:${kcal || 0};verifying:true`); // REMOVED redundant legacy fields
       formData.append("approved", "false");
       formData.append("segments", "[]");
       formData.append("file", file);
@@ -196,12 +272,22 @@ export default function UploadVideoPage() {
     setSubmitting(true);
 
     try {
+      // Construct payload with Schema: { jointName: string, weight: number }[]
+      const structuredJoints = selectedJoints.map(j => ({
+        jointName: j,
+        weight: 1.0
+      }));
+
       // 1) Update metadata
-      await updateVideo(token, editId!, {
+      const updatePayload = {
         title: name,
         difficulty: level,
-        description: `kcal:${kcal};verifying:true`,
-      });
+        exercise_family: exerciseFamily,
+        important_joints: structuredJoints,
+        description: `kcal:${kcal};verifying:true`, // REMOVED redundant legacy fields
+      };
+
+      await updateVideo(token, editId!, updatePayload);
 
       // 2) If file new -> update file
       if (file) {
@@ -237,6 +323,7 @@ export default function UploadVideoPage() {
     { value: "3", label: "Level 3" },
   ];
   const levelRef = useRef<HTMLDivElement>(null);
+  const exerciseFamilyRef = useRef<HTMLDivElement>(null);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -244,12 +331,15 @@ export default function UploadVideoPage() {
       if (levelRef.current && !levelRef.current.contains(e.target as Node)) {
         setLevelOpen(false);
       }
+      if (exerciseFamilyRef.current && !exerciseFamilyRef.current.contains(e.target as Node)) {
+        setExerciseFamilyOpen(false);
+      }
     }
-    if (levelOpen) {
+    if (levelOpen || exerciseFamilyOpen) {
       document.addEventListener("mousedown", handleClick);
     }
     return () => document.removeEventListener("mousedown", handleClick);
-  }, [levelOpen]);
+  }, [levelOpen, exerciseFamilyOpen]);
 
   // Header User logic
   const [user, setUser] = useState<{ name: string, picture?: string } | undefined>(undefined);
@@ -367,6 +457,53 @@ export default function UploadVideoPage() {
                   className="w-[97%] px-4 py-2.5 rounded-xl border-2 border-gray-300 outline-none"
                 />
               </div>
+
+              {/* Exercise Family Dropdown */}
+              <div className="mt-3.5">
+                <label className="block font-bold mb-1.5">Exercise Family</label>
+                <div ref={exerciseFamilyRef} className="relative w-[97%]">
+                  <button
+                    type="button"
+                    className="w-full flex justify-between items-center px-4 py-2.5 rounded-xl border-2 border-gray-300 bg-gray-50 shadow transition-all focus:outline-none"
+                    onClick={() => setExerciseFamilyOpen(!exerciseFamilyOpen)}
+                  >
+                    <span className={exerciseFamily ? "text-gray-900" : "text-gray-400"}>
+                      {exerciseFamily || "Select Exercise Family"}
+                    </span>
+                    <svg className="ml-2 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                  {exerciseFamilyOpen && (
+                    <div className="absolute left-0 top-full mt-2 w-full max-h-60 overflow-y-auto bg-white rounded-xl shadow-lg border border-gray-100 z-20">
+                      <button
+                        type="button"
+                        className="w-full text-left px-4 py-2 hover:bg-gray-50 text-gray-500 italic block border-b border-gray-50"
+                        onClick={() => {
+                          setExerciseFamily("");
+                          setExerciseFamilyOpen(false);
+                        }}
+                      >
+                        None
+                      </button>
+                      {exerciseNames.map((ex) => (
+                        <button
+                          key={ex}
+                          type="button"
+                          className={`w-full text-left px-4 py-2 hover:bg-violet-50 hover:text-violet-700 transition-colors block ${exerciseFamily === ex ? "bg-violet-50 text-violet-700 font-semibold" : ""}`}
+                          onClick={() => {
+                            setExerciseFamily(ex);
+                            setExerciseFamilyOpen(false);
+                          }}
+                        >
+                          {ex}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
               <div className="mt-3.5 flex items-end gap-4">
                 <div>
                   <label className="block font-bold mb-1.5">Kcalories *</label>
@@ -416,6 +553,11 @@ export default function UploadVideoPage() {
                   )}
                 </div>
               </div>
+
+              <div className="mt-4">
+                <JointSelector selectedJoints={selectedJoints} onChange={setSelectedJoints} />
+              </div>
+
               <div className="flex gap-3 mt-6">
                 <button
                   onClick={() => {
