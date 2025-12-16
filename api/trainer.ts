@@ -104,6 +104,21 @@ export async function updateVideo(token: string, videoId: string, data: any) {
     return await res.json();
 }
 
+export async function updateVideoFormData(token: string, videoId: string, formData: FormData) {
+    const res = await fetch(`${API_BASE}/videos/${videoId}`, {
+        method: "PUT",
+        headers: {
+            Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+    });
+    if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.detail || "Failed to update video");
+    }
+    return await res.json();
+}
+
 export async function updateVideoFile(token: string, videoId: string, formData: FormData) {
     const res = await fetch(`${API_BASE}/videos/${videoId}/file`, {
         method: "PUT",

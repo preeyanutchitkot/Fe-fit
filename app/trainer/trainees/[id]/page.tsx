@@ -295,7 +295,7 @@ export default function TraineeDetailView() {
 
                         <Button className="bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 text-white font-bold h-12 px-6 rounded-xl shadow-lg shadow-orange-200 transition-all hover:scale-105 flex items-center gap-2">
                             <Trophy className="h-5 w-5" />
-                            200 Points
+                            0 Points
                         </Button>
                     </div>
                 </Card>

@@ -3,7 +3,7 @@ import React, { useRef, useState, useEffect } from "react";
 import DashboardHeader from "../components/DashboardHeader";
 import { useRouter, useSearchParams } from "next/navigation";
 import Head from "next/head";
-import { uploadVideo, updateVideo, updateVideoFile, getVideo, resubmitVideo } from "@/api/trainer";
+import { uploadVideo, updateVideo, updateVideoFile, getVideo, resubmitVideo, updateVideoFormData } from "@/api/trainer";
 import KeypointOverlay from "../components/KeypointOverlay";
 import JointSelector from "../components/JointSelector";
 
@@ -278,16 +278,16 @@ export default function UploadVideoPage() {
         weight: 1.0
       }));
 
-      // 1) Update metadata
-      const updatePayload = {
-        title: name,
-        difficulty: level,
-        exercise_family: exerciseFamily,
-        important_joints: structuredJoints,
-        description: `kcal:${kcal};verifying:true`, // REMOVED redundant legacy fields
-      };
+      // 1) Update metadata using FormData
+      const formData = new FormData();
+      formData.append("title", name);
+      formData.append("difficulty", level);
+      formData.append("exercise_family", exerciseFamily);
+      formData.append("important_joints", JSON.stringify(structuredJoints));
+      formData.append("description", `kcal:${kcal};verifying:true`);
 
-      await updateVideo(token, editId!, updatePayload);
+      console.log("DEBUG: handleUpdate FormData Payload");
+      await updateVideoFormData(token, editId!, formData);
 
       // 2) If file new -> update file
       if (file) {
