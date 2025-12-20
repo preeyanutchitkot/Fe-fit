@@ -17,7 +17,7 @@ import {
     CheckCircle2,
     MonitorPlay
 } from 'lucide-react';
-import { getTraineeDetail, getStreak, getTrainers, getTrainerDetail, getWeeklyFrequency, PROFILE_IMAGE_URL } from "@/api/trainer";
+import { getTraineeDetail, getStreak, getTrainers, getTrainerDetail, getWeeklyFrequency, getTraineeWorkoutSessions, PROFILE_IMAGE_URL, WorkoutSession } from "@/api/trainer";
 import DashboardHeader from "@/app/components/DashboardHeader";
 
 // Interface Definitions
@@ -82,6 +82,13 @@ export default function TraineeDetailView() {
         return `00:${m < 10 ? '0' + m : m}`;
     };
 
+    const toPercent = (value: number) => {
+        if (!Number.isFinite(value)) return 0;
+        // Some backends store accuracy as 0..1, others 0..100
+        const v = value <= 1 ? value * 100 : value;
+        return Math.max(0, Math.min(100, Math.round(v)));
+    };
+
     useEffect(() => {
         const fetchData = async () => {
             if (!id) return;
@@ -125,6 +132,15 @@ export default function TraineeDetailView() {
 
                 // Fetch basic detail
                 const data = await getTraineeDetail(token, id);
+
+                // NEW: Fetch workout sessions (trainer view) for stats
+                let sessions: WorkoutSession[] = [];
+                try {
+                    sessions = await getTraineeWorkoutSessions(token, id);
+                } catch (e) {
+                    // Keep dashboard usable even if sessions endpoint is unavailable
+                    sessions = [];
+                }
                 // Fetch streak history
                 let streakHistory: any[] = [];
                 let currentStreak = 0;
@@ -216,13 +232,22 @@ export default function TraineeDetailView() {
                     stats: {
                         currentStreak: currentStreak,
                         bestStreak: bestStreak || 10, // Mock if missing, per screenshot request "10"
-                        averageScore: scoredCount > 0 ? Math.round(totalScore / scoredCount) : 0,
+                        averageScore: sessions.length > 0
+                            ? Math.round(
+                                sessions.reduce((sum, s) => sum + toPercent(Number(s.average_accuracy) || 0), 0) /
+                                sessions.length
+                            )
+                            : (scoredCount > 0 ? Math.round(totalScore / scoredCount) : 0),
                         progress: {
                             completed: completedCount,
                             total: processedVideos.length
                         },
-                        totalDuration: formatTotalDuration(Math.round(totalMinutes)),
-                        totalWorkouts: completedCount
+                        totalDuration: sessions.length > 0
+                            ? formatTotalDuration(Math.round(
+                                sessions.reduce((sum, s) => sum + (Number(s.duration_seconds) || 0) / 60, 0)
+                            ))
+                            : formatTotalDuration(Math.round(totalMinutes)),
+                        totalWorkouts: sessions.length > 0 ? sessions.length : completedCount
                     },
                     is_online: data.is_online || false
                 });

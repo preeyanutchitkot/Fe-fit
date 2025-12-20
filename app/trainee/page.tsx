@@ -7,7 +7,7 @@ import { Button } from '../trainer/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '../trainer/ui/avatar';
 import { Clock, Flame, Play, RotateCw, Star, TrendingUp, Zap, Trophy, Users, Video } from 'lucide-react';
 import { useRouter } from "next/navigation";
-import { getMyTrainer, getTrainerVideos, pingUser } from "@/api/trainee";
+import { getMyTrainer, getTrainerVideos, getMyWorkoutSessions, pingUser, type WorkoutSession } from "@/api/trainee";
 import { PROFILE_IMAGE_URL } from "@/api/trainer";
 
 // Dummy data for visual stats (restoring UI fidelity)
@@ -65,6 +65,60 @@ export default function TraineeDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState(dummyTraineeStats.stats);
   const [dailyStreak, setDailyStreak] = useState(dummyTraineeStats.dailyStreak);
+
+  const toPercent = (value: number) => {
+    if (!Number.isFinite(value)) return 0;
+    // Backend might return 0..1 or 0..100
+    const v = value <= 1 ? value * 100 : value;
+    return Math.max(0, Math.min(100, Math.round(v)));
+  };
+
+  const formatDurationHhMm = (totalSeconds: number) => {
+    const seconds = Math.max(0, Math.floor(totalSeconds || 0));
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    return `${h}h ${m}m`;
+  };
+
+  const isoLocalDate = (d: Date) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  };
+
+  const computeStreaks = (dateSet: Set<string>) => {
+    if (dateSet.size === 0) return { current: 0, best: 0 };
+
+    const sorted = Array.from(dateSet).sort();
+    let best = 1;
+    let cur = 1;
+    for (let i = 1; i < sorted.length; i++) {
+      const prev = new Date(sorted[i - 1] + "T00:00:00");
+      const next = new Date(sorted[i] + "T00:00:00");
+      const diffDays = Math.round((next.getTime() - prev.getTime()) / 86400000);
+      if (diffDays === 1) {
+        cur += 1;
+      } else {
+        best = Math.max(best, cur);
+        cur = 1;
+      }
+    }
+    best = Math.max(best, cur);
+
+    // current streak: consecutive days ending today
+    let current = 0;
+    const today = new Date();
+    for (let i = 0; i < 366; i++) {
+      const d = new Date(today);
+      d.setDate(today.getDate() - i);
+      const key = isoLocalDate(d);
+      if (dateSet.has(key)) current += 1;
+      else break;
+    }
+
+    return { current, best };
+  };
 
   // Initialize User
   useEffect(() => {
@@ -125,25 +179,68 @@ export default function TraineeDashboardPage() {
           }) : [];
           setVideos(processedVideos);
 
-          const totalWorkouts = processedVideos.length;
+          // Workout sessions (real stats)
+          let sessions: WorkoutSession[] = [];
+          try {
+            sessions = await getMyWorkoutSessions(token);
+          } catch (e) {
+            sessions = [];
+          }
+
+          const totalWorkoutsFromVideos = processedVideos.length;
           const completedCount = processedVideos.filter((v: any) => v.status === 'Pass').length;
-          const totalScore = processedVideos.reduce((acc: number, v: any) => acc + (v.score || 0), 0);
-          const avgScore = totalWorkouts > 0 ? Math.round(totalScore / totalWorkouts) : 0;
 
-          const totalSeconds = processedVideos.reduce((acc: number, v: any) => acc + (v.durationSeconds || 0), 0);
-          const h = Math.floor(totalSeconds / 3600);
-          const m = Math.floor((totalSeconds % 3600) / 60);
-          const durationStatsStr = `${h}h ${m}m`;
+          const totalDurationSecondsFromSessions = sessions.reduce(
+            (sum, s) => sum + (Number(s.duration_seconds) || 0),
+            0
+          );
+          const avgAccuracyPercent = sessions.length > 0
+            ? Math.round(
+              sessions.reduce((sum, s) => sum + toPercent(Number(s.average_accuracy) || 0), 0) / sessions.length
+            )
+            : 0;
 
-          let currentStreak = 0;
+          // Derive streaks & weekly calendar from sessions
+          const dateSet = new Set<string>();
+          sessions.forEach((s) => {
+            const raw = s.completed_at || s.created_at;
+            if (!raw) return;
+            const d = new Date(raw);
+            if (!Number.isNaN(d.getTime())) dateSet.add(isoLocalDate(d));
+          });
+          const { current: currentStreak, best: bestStreak } = computeStreaks(dateSet);
+
+          // Build current week calendar based on sessions
+          const today = new Date();
+          const currentDay = today.getDay(); // 0=Sun
+          const diff = currentDay === 0 ? -6 : 1 - currentDay;
+          const monday = new Date(today);
+          monday.setDate(today.getDate() + diff);
+          const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+          const currentWeekData = days.map((dayName, index) => {
+            const date = new Date(monday);
+            date.setDate(monday.getDate() + index);
+            const key = isoLocalDate(date);
+            const isToday = isoLocalDate(date) === isoLocalDate(today);
+            return {
+              day: dayName,
+              date: String(date.getDate()),
+              completed: dateSet.has(key),
+              isCurrent: isToday,
+            };
+          });
+          setDailyStreak(currentWeekData);
 
           setStats({
             currentStreak,
-            bestStreak: 7,
-            averageScore: avgScore,
-            totalWorkouts,
-            totalDuration: durationStatsStr,
-            progress: { completed: completedCount, total: totalWorkouts }
+            bestStreak,
+            averageScore: avgAccuracyPercent,
+            totalWorkouts: sessions.length > 0 ? sessions.length : totalWorkoutsFromVideos,
+            totalDuration: sessions.length > 0 ? formatDurationHhMm(totalDurationSecondsFromSessions) : formatDurationHhMm(
+              processedVideos.reduce((acc: number, v: any) => acc + (v.durationSeconds || 0), 0)
+            ),
+            // progress = assigned videos progress (keep existing behavior)
+            progress: { completed: completedCount, total: totalWorkoutsFromVideos }
           });
         }
       } catch (e) {
@@ -161,40 +258,6 @@ export default function TraineeDashboardPage() {
     }, 10000);
 
     return () => clearInterval(interval);
-  }, []);
-
-  // Generate Weekly Calendar
-  useEffect(() => {
-    const today = new Date();
-    const currentDay = today.getDay(); // 0 = Sun, 1 = Mon, ...
-    const diff = currentDay === 0 ? -6 : 1 - currentDay; // Adjust to get Monday
-    const monday = new Date(today);
-    monday.setDate(today.getDate() + diff);
-
-    const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-    const currentWeekData = days.map((dayName, index) => {
-      const date = new Date(monday);
-      date.setDate(monday.getDate() + index);
-
-      const isToday = date.getDate() === today.getDate() &&
-        date.getMonth() === today.getMonth() &&
-        date.getFullYear() === today.getFullYear();
-
-      // Check if date is in the past (ignoring time)
-      const now = new Date();
-      now.setHours(0, 0, 0, 0);
-      const compareDate = new Date(date);
-      compareDate.setHours(0, 0, 0, 0);
-      const isPast = compareDate.getTime() < now.getTime();
-
-      return {
-        day: dayName,
-        date: String(date.getDate()),
-        completed: isPast,
-        isCurrent: isToday
-      };
-    });
-    setDailyStreak(currentWeekData);
   }, []);
 
   const videosByLevel: { [key: string]: VideoData[] } = {};

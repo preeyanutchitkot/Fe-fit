@@ -13,6 +13,31 @@ export type AdminTrainee = {
   id: number | string;
   name?: string | null;
   email?: string | null;
+  profile_image?: string | null;
+};
+
+export type AdminWorkoutSession = {
+  id: number;
+  user_id: number;
+  video_id: number;
+  exercise_name: string;
+  duration_seconds: number;
+  average_accuracy: number;
+  max_accuracy: number;
+  body_part_scores?: Record<string, any> | null;
+  session_data?: Record<string, any> | null;
+  created_at?: string | null;
+  completed_at?: string | null;
+};
+
+export type AdminVideo = {
+  id: number;
+  trainer_id: number;
+  title?: string | null;
+  difficulty?: string | null;
+  description?: string | null;
+  s3_url?: string | null;
+  duration?: number | null;
 };
 
 export function profileImageUrl(userId: number | string) {
@@ -48,33 +73,28 @@ async function safeCount(path: string): Promise<number> {
 }
 
 export async function getAdminTrainers(): Promise<AdminTrainer[]> {
-  // Swagger: list trainers is GET /trainers (there is no GET /admin/trainers)
-  const res = await fetchWithAdminAuth("/trainers");
+  const res = await fetchWithAdminAuth("/admin/trainers");
   if (res.status === 401) throw new Error("Unauthorized (need admin token)");
   if (!res.ok) throw new Error(`Failed to load trainers (${res.status})`);
 
   const data = await res.json().catch(() => []);
   const list = Array.isArray(data) ? data : [];
 
-  // Enrich counts using existing endpoints
-  return Promise.all(
-    list.map(async (t: any) => {
-      const id = t.id;
-      const [membersCount, videosCount] = await Promise.all([
-        safeCount(`/admin/trainers/${id}/trainees`),
-        safeCount(`/trainers/${id}/videos`),
-      ]);
+  // Backend returns members_count/videos_count; normalize to camelCase
+  return list.map((t: any) => ({
+    id: t.id,
+    name: t.name ?? null,
+    email: t.email ?? null,
+    membersCount: toNumber(t.members_count ?? t.membersCount ?? 0, 0),
+    videosCount: toNumber(t.videos_count ?? t.videosCount ?? 0, 0),
+    online: Boolean(t.online ?? t.isOnline ?? false),
+  }));
+}
 
-      return {
-        id,
-        name: t.name ?? null,
-        email: t.email ?? null,
-        membersCount,
-        videosCount,
-        online: Boolean(t.online ?? false),
-      };
-    })
-  );
+export async function getAdminTrainerById(trainerId: number | string): Promise<AdminTrainer | null> {
+  const list = await getAdminTrainers();
+  const want = String(trainerId);
+  return list.find((t) => String(t.id) === want) || null;
 }
 
 export async function getTrainees(): Promise<AdminTrainee[]> {
@@ -82,6 +102,29 @@ export async function getTrainees(): Promise<AdminTrainee[]> {
   if (res.status === 401) throw new Error("Unauthorized");
   if (!res.ok) throw new Error("Failed to load trainees");
 
+  const data = await res.json().catch(() => []);
+  return Array.isArray(data) ? data : [];
+}
+
+export async function getAdminTrainerTrainees(trainerId: number | string): Promise<AdminTrainee[]> {
+  const res = await fetchWithAdminAuth(`/admin/trainers/${trainerId}/trainees`);
+  if (res.status === 401) throw new Error("Unauthorized (need admin token)");
+  if (!res.ok) throw new Error(`Failed to load trainer trainees (${res.status})`);
+  const data = await res.json().catch(() => []);
+  return Array.isArray(data) ? data : [];
+}
+
+export async function getAdminTraineeWorkoutSessions(traineeId: number | string): Promise<AdminWorkoutSession[]> {
+  const res = await fetchWithAdminAuth(`/admin/trainees/${traineeId}/workout-sessions`);
+  if (res.status === 401) throw new Error("Unauthorized (need admin token)");
+  if (!res.ok) throw new Error(`Failed to load trainee workout sessions (${res.status})`);
+  const data = await res.json().catch(() => []);
+  return Array.isArray(data) ? data : [];
+}
+
+export async function getTrainerVideosForAdmin(trainerId: number | string): Promise<AdminVideo[]> {
+  const res = await fetchWithAdminAuth(`/trainers/${trainerId}/videos`);
+  if (!res.ok) throw new Error(`Failed to load trainer videos (${res.status})`);
   const data = await res.json().catch(() => []);
   return Array.isArray(data) ? data : [];
 }

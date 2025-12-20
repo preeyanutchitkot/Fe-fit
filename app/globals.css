@@ -2,7 +2,7 @@
 
 :root {
   --background: #ffffff;
-  --foreground: #171717;
+  --foreground: #000000;
 }
 
 @theme inline {
@@ -14,8 +14,8 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #ffffff;
+    --foreground: #000000;
   }
 }
 
@@ -159,7 +159,7 @@ html {
 }
 
 .fitaddict-hero p {
-  color: #64748b;
+  color: var(--foreground);
   font-size: 1.13rem;
   max-width: 600px;
   margin: 0 auto 1.7rem;
@@ -227,7 +227,7 @@ html {
 }
 
 .fitaddict-feature-card p {
-  color: #475569;
+  color: var(--foreground);
   font-size: 1.04rem;
 }
 
@@ -251,7 +251,7 @@ html {
 
 .fitaddict-footer {
   text-align: center;
-  color: #64748b;
+  color: var(--foreground);
   padding: 2.2rem 0 1.2rem 0;
   font-size: 1.04rem;
   background: none;
@@ -275,7 +275,7 @@ html {
   border: 1.5px solid #ede9fe;
   border-radius: 18px;
   padding: 0.9rem 1.1rem;
-  color: #475569;
+  color: var(--foreground);
   margin: 0 auto 1rem;
   max-width: 900px;
 }
@@ -308,7 +308,7 @@ html {
 .au-msg {
   margin: 0.3rem auto 1.1rem;
   max-width: 900px;
-  color: #475569;
+  color: var(--foreground);
   font-weight: 600;
 }
 
@@ -333,7 +333,7 @@ html {
 }
 
 .au-stat__label {
-  color: #64748b;
+  color: var(--foreground);
   font-weight: 700;
   font-size: 0.95rem;
 }
@@ -377,7 +377,7 @@ html {
 .au-loading,
 .au-empty {
   text-align: center;
-  color: #64748b;
+  color: var(--foreground);
   font-weight: 700;
   padding: 1.2rem 0.8rem;
 }
@@ -464,7 +464,7 @@ html {
 }
 
 .au-muted {
-  color: #64748b;
+  color: var(--foreground);
   font-weight: 700;
   font-size: 0.92rem;
   overflow: hidden;
@@ -537,7 +537,7 @@ html {
 }
 
 .au-card__email {
-  color: #64748b;
+  color: var(--foreground);
   font-weight: 700;
   font-size: 0.92rem;
   overflow: hidden;
@@ -553,4 +553,24 @@ html {
   .au-stats {
     grid-template-columns: 1fr;
   }
+}
+
+/*
+  Global readability override:
+  Many pages use Tailwind utilities like `text-gray-500` which can make the UI feel too washed out.
+  This forces those muted text utilities to render using the app foreground color.
+
+  Note: This is intentionally broad to match the UX request (“make most/all text black”).
+*/
+[class*=" text-gray-"],
+[class^="text-gray-"],
+[class*=" text-slate-"],
+[class^="text-slate-"],
+[class*=" text-neutral-"],
+[class^="text-neutral-"],
+[class*=" text-zinc-"],
+[class^="text-zinc-"],
+[class*=" text-stone-"],
+[class^="text-stone-"] {
+  color: var(--foreground) !important;
 }
