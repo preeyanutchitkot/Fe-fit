@@ -21,7 +21,16 @@ export function Avatar({ className = "", children }: AvatarProps) {
   return <span className={`inline-block rounded-full overflow-hidden bg-gray-200 ${className}`}>{children}</span>;
 }
 export function AvatarImage({ src, alt, className = "", ...props }: AvatarImageProps) {
-  return <img src={src} alt={alt} className={`w-full h-full object-cover ${className}`} {...props} />;
+  const defaultSrc = "/user (4).png";
+  return (
+    <img
+      src={src || defaultSrc}
+      alt={alt}
+      className={`w-full h-full object-cover ${className}`}
+      onError={(e) => { e.currentTarget.src = defaultSrc; }}
+      {...props}
+    />
+  );
 }
 export function AvatarFallback({ children, className = "" }: AvatarFallbackProps) {
   return <span className={`flex items-center justify-center w-full h-full bg-gray-200 ${className}`}>{children}</span>;

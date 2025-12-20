@@ -45,6 +45,7 @@ interface VideoData {
   difficulty?: string;
   score?: number;
   statusBtn?: string;
+  durationSeconds?: number;
 }
 
 interface TrainerData {
@@ -62,6 +63,8 @@ export default function TraineeDashboardPage() {
   const [trainer, setTrainer] = useState<TrainerData | null>(null);
   const [videos, setVideos] = useState<VideoData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState(dummyTraineeStats.stats);
+  const [dailyStreak, setDailyStreak] = useState(dummyTraineeStats.dailyStreak);
 
   // Initialize User
   useEffect(() => {
@@ -90,31 +93,61 @@ export default function TraineeDashboardPage() {
         });
 
         if (trainerData.id) {
-          try {
-            const vids = await getTrainerVideos(token, trainerData.id);
-            setVideos(Array.isArray(vids) ? vids.map((v: any) => {
-              let durationStr = "00:00";
-              if (typeof v.duration === 'number') {
-                const m = Math.floor(v.duration / 60);
-                const s = v.duration % 60;
-                durationStr = `${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
-              } else if (v.duration) {
-                durationStr = v.duration;
-              }
-              return {
-                ...v,
-                level: v.level || v.difficulty || "General",
-                status: v.status || "Not Started",
-                score: v.score || 0,
-                duration: durationStr
-              };
-            }) : []);
-          } catch (err) {
-            console.error("Failed to fetch videos", err);
-          }
+          const vids = await getTrainerVideos(token, trainerData.id);
+          const processedVideos = Array.isArray(vids) ? vids.map((v: any) => {
+            let durationStr = "00:00";
+            if (typeof v.duration === 'number') {
+              const m = Math.floor(v.duration / 60);
+              const s = v.duration % 60;
+              durationStr = `${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
+            } else if (v.duration) {
+              durationStr = v.duration;
+            }
+
+            // Extract Calories
+            let calories = v.calories || v.kcal || 0;
+            if (!calories && v.description) {
+              const match = v.description.match(/(\d+)\s*(?:kcal|cal)/i) ||
+                v.description.match(/(?:calories|cal)[:\s]*(\d+)/i);
+              if (match) calories = parseInt(match[1]);
+            }
+
+            return {
+              ...v,
+              name: v.name || v.title || "Untitled Workout",
+              calories: calories,
+              level: v.level || v.difficulty || "General",
+              status: v.status || "Not Started",
+              score: v.score || 0,
+              duration: durationStr,
+              durationSeconds: typeof v.duration === 'number' ? v.duration : 0
+            };
+          }) : [];
+          setVideos(processedVideos);
+
+          const totalWorkouts = processedVideos.length;
+          const completedCount = processedVideos.filter((v: any) => v.status === 'Pass').length;
+          const totalScore = processedVideos.reduce((acc: number, v: any) => acc + (v.score || 0), 0);
+          const avgScore = totalWorkouts > 0 ? Math.round(totalScore / totalWorkouts) : 0;
+
+          const totalSeconds = processedVideos.reduce((acc: number, v: any) => acc + (v.durationSeconds || 0), 0);
+          const h = Math.floor(totalSeconds / 3600);
+          const m = Math.floor((totalSeconds % 3600) / 60);
+          const durationStatsStr = `${h}h ${m}m`;
+
+          let currentStreak = 0;
+
+          setStats({
+            currentStreak,
+            bestStreak: 7,
+            averageScore: avgScore,
+            totalWorkouts,
+            totalDuration: durationStatsStr,
+            progress: { completed: completedCount, total: totalWorkouts }
+          });
         }
       } catch (e) {
-        console.log("No trainer assigned or error fetching trainer");
+        console.log("No trainer assigned");
       } finally {
         setLoading(false);
       }
@@ -130,38 +163,40 @@ export default function TraineeDashboardPage() {
     return () => clearInterval(interval);
   }, []);
 
-  // Poll videos if trainer exists
+  // Generate Weekly Calendar
   useEffect(() => {
-    if (!trainer?.id) return;
-    const interval = setInterval(async () => {
-      const token = localStorage.getItem('token');
-      if (token && trainer.id) {
-        try {
-          const vids = await getTrainerVideos(token, trainer.id);
-          setVideos(Array.isArray(vids) ? vids.map((v: any) => {
-            let durationStr = "00:00";
-            if (typeof v.duration === 'number') {
-              const m = Math.floor(v.duration / 60);
-              const s = v.duration % 60;
-              durationStr = `${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
-            } else if (v.duration) {
-              durationStr = v.duration;
-            }
-            return {
-              ...v,
-              level: v.level || v.difficulty || "General",
-              status: v.status || "Not Started",
-              score: v.score || 0,
-              duration: durationStr
-            };
-          }) : []);
-        } catch { }
-      }
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [trainer?.id]);
+    const today = new Date();
+    const currentDay = today.getDay(); // 0 = Sun, 1 = Mon, ...
+    const diff = currentDay === 0 ? -6 : 1 - currentDay; // Adjust to get Monday
+    const monday = new Date(today);
+    monday.setDate(today.getDate() + diff);
 
-  // Group videos by Level/Difficulty
+    const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+    const currentWeekData = days.map((dayName, index) => {
+      const date = new Date(monday);
+      date.setDate(monday.getDate() + index);
+
+      const isToday = date.getDate() === today.getDate() &&
+        date.getMonth() === today.getMonth() &&
+        date.getFullYear() === today.getFullYear();
+
+      // Check if date is in the past (ignoring time)
+      const now = new Date();
+      now.setHours(0, 0, 0, 0);
+      const compareDate = new Date(date);
+      compareDate.setHours(0, 0, 0, 0);
+      const isPast = compareDate.getTime() < now.getTime();
+
+      return {
+        day: dayName,
+        date: String(date.getDate()),
+        completed: isPast,
+        isCurrent: isToday
+      };
+    });
+    setDailyStreak(currentWeekData);
+  }, []);
+
   const videosByLevel: { [key: string]: VideoData[] } = {};
   videos.forEach(v => {
     const lvl = String(v.level || "General");
@@ -180,7 +215,6 @@ export default function TraineeDashboardPage() {
     return "/workout1.jpg";
   }
 
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-violet-50 via-white to-orange-50">
       <DashboardHeader role="trainee" user={user} />
@@ -189,7 +223,6 @@ export default function TraineeDashboardPage() {
           <h2 className="text-4xl mb-2">My Dashboard</h2>
           <p className="text-gray-600 text-lg">Track your progress and workouts</p>
         </div>
-
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-1">
             <div className="sticky top-24 space-y-4">
@@ -231,12 +264,12 @@ export default function TraineeDashboardPage() {
                   <h3 className="text-sm">Daily Streak</h3>
                 </div>
                 <div className="flex items-center justify-between gap-1">
-                  {dummyTraineeStats.dailyStreak.map((day, index) => (
+                  {dailyStreak.map((day, index) => (
                     <div key={index} className="flex flex-col items-center gap-1.5">
                       <p className="text-xs text-gray-600">{day.day[0]}</p>
                       <div
-                        className={`h-7 w-7 rounded-lg flex items-center justify-center transition-all duration-200 ${day.completed ? 'bg-gradient-to-br from-green-500 to-green-600 text-white shadow-md shadow-green-200' :
-                          day.isCurrent ? 'bg-gradient-to-br from-gray-700 to-gray-900 text-white shadow-md' :
+                        className={`h-7 w-7 rounded-lg flex items-center justify-center transition-all duration-200 ${day.completed ? 'bg-green-500 text-white shadow-md shadow-green-200' :
+                          day.isCurrent ? 'bg-gray-800 text-white shadow-md' :
                             'bg-gray-300 text-white'
                           }`}
                       >
@@ -263,7 +296,7 @@ export default function TraineeDashboardPage() {
                       </div>
                       <div>
                         <p className="text-xs text-gray-600">Streak</p>
-                        <p className="text-sm">{dummyTraineeStats.stats.currentStreak}d</p>
+                        <p className="text-sm">{stats.currentStreak}d</p>
                       </div>
                     </div>
                   </div>
@@ -274,7 +307,7 @@ export default function TraineeDashboardPage() {
                       </div>
                       <div>
                         <p className="text-xs text-gray-600">Avg Score</p>
-                        <p className="text-sm">{dummyTraineeStats.stats.averageScore}%</p>
+                        <p className="text-sm">{stats.averageScore}%</p>
                       </div>
                     </div>
                   </div>
@@ -285,7 +318,7 @@ export default function TraineeDashboardPage() {
                       </div>
                       <div>
                         <p className="text-xs text-gray-600">Progress</p>
-                        <p className="text-sm">{dummyTraineeStats.stats.progress.completed}/{dummyTraineeStats.stats.progress.total}</p>
+                        <p className="text-sm">{stats.progress.completed}/{stats.progress.total}</p>
                       </div>
                     </div>
                   </div>
@@ -296,7 +329,7 @@ export default function TraineeDashboardPage() {
                       </div>
                       <div>
                         <p className="text-xs text-gray-600">Duration</p>
-                        <p className="text-sm">{dummyTraineeStats.stats.totalDuration}</p>
+                        <p className="text-sm">{stats.totalDuration}</p>
                       </div>
                     </div>
                   </div>
@@ -307,7 +340,7 @@ export default function TraineeDashboardPage() {
                       </div>
                       <div>
                         <p className="text-xs text-gray-600">Workouts</p>
-                        <p className="text-sm">{dummyTraineeStats.stats.totalWorkouts}</p>
+                        <p className="text-sm">{stats.totalWorkouts}</p>
                       </div>
                     </div>
                   </div>
@@ -335,11 +368,11 @@ export default function TraineeDashboardPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                   {videosByLevel[level].map(v => (
                     <Card key={v.id} className="group overflow-hidden hover:shadow-xl transition-all duration-300 border-2 border-gray-300 hover:border-violet-200">
-                      <div className="relative h-48 bg-gradient-to-br from-gray-200 to-gray-300 overflow-hidden">
-                        {v.s3_url?.endsWith(".mp4") ? (
+                      <div className="relative h-48 bg-white overflow-hidden flex items-center justify-center">
+                        {v.s3_url && (v.s3_url.endsWith(".mp4") || v.s3_url.endsWith(".mov")) ? (
                           <video
                             src={getVideoUrl(v)}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
                             muted
                             onMouseOver={(e: any) => e.currentTarget.play()}
                             onMouseOut={(e: any) => { e.currentTarget.pause(); e.currentTarget.currentTime = 0; }}
@@ -348,11 +381,11 @@ export default function TraineeDashboardPage() {
                           <img
                             src={getVideoUrl(v)}
                             alt={v.name}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
                           />
                         )}
 
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10 pointer-events-none"></div>
                         <Badge className={`absolute top-3 right-3 text-white border-0 shadow-lg px-3 py-1 rounded-full ${v.status === 'Pass' ? 'bg-emerald-500' :
                           v.status === 'Try Again' ? 'bg-orange-500' : 'bg-gray-400'
                           }`}>
@@ -368,7 +401,7 @@ export default function TraineeDashboardPage() {
                           </div>
                           <div className="flex items-center gap-1.5">
                             <Flame className="h-4 w-4 text-orange-500" />
-                            <span>{v.calories || 0}</span>
+                            <span>{v.calories || 0} Kcal</span>
                           </div>
                         </div>
                         {v.score ? (
@@ -379,11 +412,11 @@ export default function TraineeDashboardPage() {
 
                         <Button
                           variant="default"
-                          className="w-full gap-2 bg-gradient-to-r from-orange-500 via-pink-500 to-violet-600 text-white font-semibold text-base shadow-none border-0 hover:shadow-xl hover:scale-[1.02] transition-transform"
+                          className="w-full h-12 flex flex-row items-center justify-center gap-2 bg-gradient-to-r from-orange-500 via-pink-500 to-violet-600 text-white font-semibold text-base shadow-none border-0 hover:shadow-xl hover:scale-[1.02] transition-transform rounded-xl"
                           onClick={() => router.push(`/workout/${v.id}`)}
                         >
                           <Play className="h-5 w-5 fill-white" />
-                          Play
+                          <span className="relative top-[1px]">Play</span>
                         </Button>
                         {v.status !== 'Not Started' && (
                           <Button variant="default" className="mt-2 w-full text-sm h-8 bg-gray-100 text-gray-600 hover:bg-gray-200 border-0 shadow-none">
@@ -398,7 +431,7 @@ export default function TraineeDashboardPage() {
             ))}
           </div>
         </div>
-      </main>
-    </div>
+      </main >
+    </div >
   );
-} 
+}
