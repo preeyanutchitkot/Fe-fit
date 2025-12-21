@@ -189,7 +189,7 @@ export default function AdminTrainerDashboardPage() {
       <main className="max-w-7xl mx-auto px-8 py-10">
         <Button
           variant="ghost"
-          onClick={() => router.back()}
+          onClick={() => router.push("/admin/users")}
           className="mb-6 -ml-2 text-gray-600 hover:text-gray-900"
         >
           <ArrowLeft className="h-5 w-5 mr-2" />
@@ -346,7 +346,7 @@ export default function AdminTrainerDashboardPage() {
                     <p className="text-sm text-gray-600">members currently online</p>
                   </Card>
 
-                  <Card className="p-6 bg-white border-gray-200">
+                  {/* <Card className="p-6 bg-white border-gray-200">
                     <h4 className="text-sm mb-4 text-gray-500 uppercase tracking-wider">How It Works</h4>
                     <div className="space-y-3 text-sm text-gray-600">
                       <div className="flex items-start gap-3">
@@ -362,7 +362,7 @@ export default function AdminTrainerDashboardPage() {
                         <p>Monitor workout sessions and completion</p>
                       </div>
                     </div>
-                  </Card>
+                  </Card> */}
                 </div>
               </div>
             </div>

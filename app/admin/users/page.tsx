@@ -248,6 +248,15 @@ export default function AdminUsersPage() {
               <Card
                 key={trainer.id}
                 className="group p-6 hover:shadow-xl transition-all duration-300 cursor-pointer border-l-4 border-l-transparent hover:border-l-violet-500 bg-white/80 backdrop-blur-sm"
+                role="button"
+                tabIndex={0}
+                onClick={() => router.push(`/admin/trainers/${trainer.id}`)}
+                onKeyDown={(e: React.KeyboardEvent) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    router.push(`/admin/trainers/${trainer.id}`);
+                  }
+                }}
               >
                 <div className="flex items-center gap-6">
                   <div className="relative shrink-0">
@@ -302,17 +311,6 @@ export default function AdminUsersPage() {
                   <Badge className="px-4 py-2 border border-violet-200 text-violet-600 group-hover:bg-violet-50 transition-colors shrink-0 bg-transparent rounded-xl">
                     Resets in {trainer.resetDays}d
                   </Badge>
-
-                  <Button
-                    className="h-10 px-5 rounded-xl bg-gradient-to-r from-orange-500 via-pink-500 to-violet-600 text-white font-bold shadow-none border-0 hover:shadow-lg hover:scale-[1.02] transition-transform"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      router.push(`/admin/trainers/${trainer.id}`);
-                    }}
-                  >
-                    View Dashboard
-                  </Button>
                 </div>
               </Card>
             ))}

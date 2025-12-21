@@ -76,7 +76,7 @@ export default function AdminLogin() {
                 onChange={(e) => setUsername(e.target.value)}
                 required
                 className="au-input"
-                placeholder="admin"
+                //placeholder="admin"
               />
 
               <label style={{ fontWeight: 800, color: "#64748b", marginTop: "0.35rem" }}>Password</label>
@@ -86,7 +86,7 @@ export default function AdminLogin() {
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 className="au-input"
-                placeholder="••••••••"
+                //placeholder="••••••••"
               />
 
               <button type="submit" disabled={loading} className="fitaddict-btn" style={{ width: "100%" }}>
