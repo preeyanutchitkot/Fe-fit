@@ -1,5 +1,28 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || process.env.NEXT_PUBLIC_BACKEND_URL || "/api/backend";
 
+export type WorkoutSession = {
+    id: number;
+    user_id: number;
+    video_id: number;
+    exercise_name: string;
+    duration_seconds: number;
+    average_accuracy: number;
+    max_accuracy: number;
+    body_part_scores?: Record<string, any> | null;
+    session_data?: Record<string, any> | null;
+    created_at?: string | null;
+    completed_at?: string | null;
+};
+
+export async function getTraineeWorkoutSessions(token: string, traineeId: string) {
+    const res = await fetch(`${API_BASE}/trainer/trainees/${traineeId}/workout-sessions`, {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+    });
+    if (!res.ok) throw new Error("Failed to fetch trainee workout sessions");
+    return (await res.json()) as WorkoutSession[];
+}
+
 export async function getVideos(token: string) {
     const res = await fetch(`${API_BASE}/my-videos`, {
         headers: { Authorization: `Bearer ${token}` },

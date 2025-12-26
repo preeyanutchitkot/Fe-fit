@@ -12,6 +12,8 @@ export default function LoginPage() {
   const handleGoogleSuccess = async (credentialResponse: any) => {
     setIsLoading(true);
     setError("");
+
+    console.log(credentialResponse);
     try {
       const token = credentialResponse.credential;
       const { response, data } = await loginWithGoogle(token);
@@ -41,6 +43,8 @@ export default function LoginPage() {
     } finally {
       setIsLoading(false);
     }
+
+    
   };
 
   const handleGoogleError = () => {
