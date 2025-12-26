@@ -286,12 +286,8 @@ const KeypointOverlay: React.FC<KeypointOverlayProps> = ({ videoRef, isPlaying, 
                 // Different colors for different body parts
                 if (index <= 10) {
                     ctx.fillStyle = '#FF6B6B'; // Face and upper body
-                } else if (index <= 16) {
-                    ctx.fillStyle = '#4ECDC4'; // Arms
-                } else if (index <= 22) {
-                    ctx.fillStyle = '#45B7D1'; // Hands
                 } else {
-                    ctx.fillStyle = '#96CEB4'; // Legs and body
+                    ctx.fillStyle = '#38BDF8'; // Unified Blue for all body parts
                 }
 
                 ctx.fill();

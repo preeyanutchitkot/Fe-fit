@@ -130,7 +130,7 @@ const JointSelector: React.FC<JointSelectorProps> = ({ selectedJoints, onChange 
                                 <circle cx={coords.cx} cy={coords.cy} r={coords.r + 6} className="fill-transparent" />
                                 <circle
                                     cx={coords.cx} cy={coords.cy} r={coords.r}
-                                    className={`transition-colors duration-200 stroke-2 ${active ? 'fill-orange-500 stroke-orange-600' : 'fill-white stroke-gray-400 group-hover:stroke-gray-600'}`}
+                                    className={`transition-colors duration-200 stroke-2 ${active ? 'fill-sky-400 stroke-sky-500' : 'fill-white stroke-gray-400 group-hover:stroke-gray-600'}`}
                                 />
                                 <title>{name}</title>
                             </g>
